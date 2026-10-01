@@ -27,6 +27,10 @@ Un navigateur récent: Safari, Chrome, Firefox ou Edge.
 
 Rien d'autre. Ouvre `exemple/disposition.html` (double clic, ou glisser le fichier dans le navigateur). Le calcul se fait dans la page, sans réseau. Tu peux changer une largeur, une longueur, une ouverture ou un réglage: le dessin se recalcule.
 
+<img width="1189" height="812" alt="image" src="https://github.com/user-attachments/assets/7c88cabd-3a96-48ca-ab12-eac7e75e4f56" />
+
+
+
 ### Pour calculer un mur et produire une nouvelle page
 
 [Node.js](https://nodejs.org) 18 ou plus récent. Aucun paquet à installer (`npm install` ne sert à rien ici).
