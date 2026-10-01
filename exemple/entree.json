@@ -1,0 +1,49 @@
+{
+  "projet": "exemple",
+  "lames": [
+    {
+      "id": "A",
+      "largeurUtile": 90,
+      "epaisseur": 18,
+      "longueur": 2400,
+      "prix": 6.5,
+      "lamesParPaquet": 6,
+      "libelle": "Lame 90 x 18, 2400 mm"
+    },
+    {
+      "id": "B",
+      "largeurUtile": 140,
+      "epaisseur": 18,
+      "longueur": 3000,
+      "prix": 11,
+      "libelle": "Lame 140 x 18, 3000 mm"
+    }
+  ],
+  "murs": [
+    {
+      "id": "mur-exemple",
+      "largeur": 3600,
+      "hauteur": 2450,
+      "obstacles": [
+        {
+          "libelle": "fenetre",
+          "x": 1000,
+          "y": 900,
+          "largeur": 1200,
+          "hauteur": 1100
+        },
+        {
+          "libelle": "prise",
+          "x": 300,
+          "y": 300,
+          "largeur": 80,
+          "hauteur": 80
+        }
+      ]
+    }
+  ],
+  "options": {
+    "orientation": "auto",
+    "motif": "auto"
+  }
+}
