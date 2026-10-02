@@ -34,7 +34,14 @@
   button.primaire { background: var(--accent); color: #fff; border-color: var(--accent); }
   button.petit { padding: 2px 7px; font-size: 12px; }
   .barre { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
-  .mur-carte { border: 1px solid var(--ligne); border-radius: 8px; padding: 8px; margin-bottom: 8px; background: #fbfaf7; }
+  .mur-carte, .lame-carte { border: 1px solid var(--ligne); border-radius: 8px; padding: 8px; margin-bottom: 8px; background: #fbfaf7; }
+  .lame-entete { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 4px; }
+  .case-ligne { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+  .case-ligne span { font-size: 13px; }
+  .bord { margin-top: 6px; padding-top: 4px; border-top: 1px dashed var(--ligne); }
+  .defile { overflow-x: auto; }
+  .defile input[type="number"], .defile input[type="text"] { width: 6.2em; min-width: 6.2em; }
+  .defile select { width: 8em; min-width: 8em; }
   .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; }
   .kpi { background: #faf7f1; border: 1px solid var(--ligne); border-radius: 8px; padding: 8px 10px; }
   .kpi b { display: block; font-size: 20px; }
@@ -84,7 +91,7 @@
     <div id="zone-erreur"></div>
     <div class="carte variantes-carte">
       <h2>Variantes comparées</h2>
-      <div class="note" id="note-variantes">Chaque carte est une disposition possible. Cliquer pour l'afficher.</div>
+      <div class="note" id="note-variantes">Au chargement, la carte encadrée est la disposition retenue. Les autres cartes sont d'autres essais : cliquer en remplace l'affichage. Recliquer sur « Disposition retenue » pour revenir.</div>
       <div class="variantes" id="zone-variantes"></div>
     </div>
     <div class="carte">
@@ -132,6 +139,8 @@
 
   var dernier = null;
   var minuterie = null;
+  var etatInitial = JSON.parse(JSON.stringify(etat));
+  var resultatInitial = null;
 
   function h(tag, attrs) {
     var el = document.createElement(tag);
@@ -168,29 +177,94 @@
   function dessinerLames() {
     var zone = document.getElementById('zone-lames');
     zone.innerHTML = '';
-    var table = h('table', {}, h('tr', {},
-      h('th', { texte: 'Id' }), h('th', { texte: 'Larg. utile' }), h('th', { texte: 'Longueur' }),
-      h('th', { texte: 'Épaiss.' }), h('th', { texte: 'Quantité' }), h('th', { texte: 'Prix' }),
-      h('th', { texte: 'Par paquet' }), h('th', { texte: 'Refend.' }), h('th', {})));
     etat.lames.forEach(function (l, i) {
       var refend = h('input', { type: 'checkbox' });
       refend.checked = l.refendable !== false;
       refend.addEventListener('change', function () { if (refend.checked) delete l.refendable; else l.refendable = false; planifier(); });
-      table.appendChild(h('tr', {},
-        h('td', {}, champ(l, 'id', { type: 'text', requis: true })),
-        h('td', {}, champ(l, 'largeurUtile', { requis: true })),
-        h('td', {}, champ(l, 'longueur', { requis: true })),
-        h('td', {}, champ(l, 'epaisseur')),
-        h('td', {}, champ(l, 'quantite', { placeholder: 'illim.' })),
-        h('td', {}, champ(l, 'prix')),
-        h('td', {}, champ(l, 'lamesParPaquet')),
-        h('td', {}, refend),
-        h('td', {}, h('button', { class: 'petit', type: 'button', texte: 'x', title: 'Supprimer', onclick: function () { etat.lames.splice(i, 1); dessinerLames(); planifier(); } }))));
+      zone.appendChild(h('div', { class: 'lame-carte' },
+        h('div', { class: 'lame-entete' },
+          h('strong', { texte: l.libelle || ('Lame ' + (i + 1)) }),
+          h('button', { class: 'petit', type: 'button', texte: 'Retirer', title: 'Retirer cette lame', onclick: function () { etat.lames.splice(i, 1); dessinerLames(); planifier(); } })),
+        h('div', { class: 'grille2' },
+          h('div', {}, h('label', { texte: 'Identifiant' }), champ(l, 'id', { type: 'text', requis: true })),
+          h('div', {}, h('label', { texte: 'Largeur utile (mm)' }), champ(l, 'largeurUtile', { requis: true })),
+          h('div', {}, h('label', { texte: 'Longueur (mm)' }), champ(l, 'longueur', { requis: true })),
+          h('div', {}, h('label', { texte: 'Épaisseur (mm)' }), champ(l, 'epaisseur')),
+          h('div', {}, h('label', { texte: 'Quantité en stock' }), champ(l, 'quantite', { placeholder: 'vide = à acheter' })),
+          h('div', {}, h('label', { texte: 'Prix' }), champ(l, 'prix')),
+          h('div', {}, h('label', { texte: 'Lames par paquet' }), champ(l, 'lamesParPaquet'))),
+        h('div', { class: 'case-ligne' }, refend, h('span', { texte: 'Recoupe en largeur possible' }))));
     });
-    zone.appendChild(table);
-    zone.appendChild(h('div', { class: 'note', texte: 'Quantité vide : stock illimité (mode achat). Une quantité renseignée : stock à utiliser.' }));
+    zone.appendChild(h('div', { class: 'note', texte: 'Quantité vide : ces lames sont à acheter, sans limite. Une quantité : c\'est ton stock, le calcul ne le dépasse pas.' }));
+    zone.appendChild(h('div', { class: 'note', texte: 'Recoupe en largeur : seulement la dernière lame du mur. Les autres gardent leur largeur d\'usine, sinon la languette de raccord est perdue. Décoche si même cette dernière lame ne peut pas être recoupée.' }));
     zone.appendChild(h('div', { class: 'barre' }, h('button', { type: 'button', texte: 'Ajouter une lame', onclick: function () {
       etat.lames.push({ id: 'L' + (etat.lames.length + 1), largeurUtile: 90, longueur: 2400 }); dessinerLames(); planifier(); } })));
+  }
+
+  function bordsTousRas(m) {
+    if (!m.bords) return true;
+    return !['gauche', 'droite', 'bas', 'haut'].some(function (k) {
+      return m.bords[k] && m.bords[k].type && m.bords[k].type !== 'ras';
+    });
+  }
+  function editeurBord(m, nom, titre) {
+    var b = (m.bords && m.bords[nom]) || { type: 'ras' };
+    var type = h('select', {},
+      h('option', { value: 'ras', texte: 'À ras, coupe droite' }),
+      h('option', { value: 'joint', texte: 'Joint, coupe droite' }),
+      h('option', { value: 'angle', texte: 'Angle avec la face voisine' }));
+    type.value = b.type || 'ras';
+    var detail = h('div', {});
+    if (b.type === 'joint') {
+      detail.appendChild(h('label', { texte: 'Largeur du joint (mm)' }));
+      detail.appendChild(champ(b, 'joint', { placeholder: '0' }));
+    }
+    if (b.type === 'angle') {
+      var choix = (b.sens === 'sortant') ? '270' : (b.coupe === 'arrete' ? '90-arrete' : (b.coupe === 'passe' ? '90-passe' : '90-auto'));
+      var coin = h('select', {},
+        h('option', { value: '90-auto', texte: 'Coin à 90°, le calcul choisit qui va au fond' }),
+        h('option', { value: '90-passe', texte: 'Coin à 90°, cette face va au fond' }),
+        h('option', { value: '90-arrete', texte: 'Coin à 90°, cette face s\'arrête contre l\'autre' }),
+        h('option', { value: '270', texte: 'Coin à 270°, coupe à 45°' }));
+      coin.value = choix;
+      coin.addEventListener('change', function () {
+        if (coin.value === '270') { b.sens = 'sortant'; b.coupe = '45'; delete b.epaisseurRencontre; }
+        else if (coin.value === '90-arrete') { b.sens = 'rentrant'; b.coupe = 'arrete'; }
+        else if (coin.value === '90-passe') { b.sens = 'rentrant'; b.coupe = 'passe'; delete b.epaisseurRencontre; }
+        else { b.sens = 'rentrant'; b.coupe = 'auto'; delete b.epaisseurRencontre; }
+        dessinerMurs();
+        planifier();
+      });
+      detail.appendChild(h('label', { texte: 'Quel coin' }));
+      detail.appendChild(coin);
+      if (choix === '90-auto') {
+        detail.appendChild(h('div', { class: 'note', texte: 'Coupe droite. Le calcul met au fond la face qui ouvre le moins de lames. L\'autre est plus courte de l\'épaisseur de la lame plus celle du lambourdage. Nomme la face voisine.' }));
+      }
+      if (choix === '90-passe') {
+        detail.appendChild(h('div', { class: 'note', texte: 'Coupe droite. Cette face va au fond : elle garde la cote du mur, bout appuyé sur le lambourdage de l\'autre mur.' }));
+      }
+      if (choix === '90-arrete') {
+        detail.appendChild(h('div', { class: 'note', texte: 'Coupe droite. Cette lame est plus courte de l\'épaisseur de l\'autre lame plus celle du lambourdage. Vide : on prend les épaisseurs de ce mur.' }));
+        detail.appendChild(h('label', { texte: 'Retrait si l\'autre mur est différent (mm)' }));
+        detail.appendChild(champ(b, 'epaisseurRencontre', { placeholder: 'vide = lame + lambourdage' }));
+      }
+      if (choix === '270') {
+        detail.appendChild(h('div', { class: 'note', texte: 'Les deux faces sont coupées à 45°. La pointe longue dépasse le mur du lambourdage plus l\'épaisseur de la lame.' }));
+      }
+      detail.appendChild(h('label', { texte: 'Nom de la face voisine' }));
+      detail.appendChild(champ(b, 'voisin', { type: 'text', placeholder: 'facultatif' }));
+    }
+    type.addEventListener('change', function () {
+      if (!m.bords) m.bords = { gauche: { type: 'ras' }, droite: { type: 'ras' }, bas: { type: 'ras' }, haut: { type: 'ras' } };
+      if (!m.bords[nom]) m.bords[nom] = { type: 'ras' };
+      var courant = m.bords[nom];
+      courant.type = type.value;
+      if (courant.type === 'angle') { courant.sens = 'rentrant'; courant.coupe = 'auto'; }
+      if (bordsTousRas(m)) delete m.bords;
+      dessinerMurs();
+      planifier();
+    });
+    return h('div', { class: 'bord' }, h('label', { texte: titre }), type, detail);
   }
 
   function dessinerMurs() {
@@ -216,9 +290,15 @@
         h('div', { class: 'grille2' },
           h('div', {}, h('label', { texte: 'Nom du mur' }), champ(m, 'id', { type: 'text', requis: true })),
           h('div', {}, h('label', { texte: 'Sens imposé' }), orient),
-          h('div', {}, h('label', { texte: 'Largeur' }), champ(m, 'largeur', { requis: true })),
-          h('div', {}, h('label', { texte: 'Hauteur' }), champ(m, 'hauteur', { requis: true }))),
-        h('label', { texte: 'Obstacles (origine : coin bas gauche du mur)' }), obs,
+          h('div', {}, h('label', { texte: 'Largeur du support' }), champ(m, 'largeur', { requis: true })),
+          h('div', {}, h('label', { texte: 'Hauteur du support' }), champ(m, 'hauteur', { requis: true })),
+          h('div', {}, h('label', { texte: 'Épaisseur du support (mm)' }), champ(m, 'epaisseurSupport', { placeholder: '0 = sur le mur' }))),
+        h('div', { class: 'note', texte: 'Largeur et hauteur sont celles du mur ou du meuble. Chaque bord dit si la lame s\'arrête à ras, laisse un joint, ou tourne un angle.' }),
+        editeurBord(m, 'gauche', 'Bord gauche'),
+        editeurBord(m, 'droite', 'Bord droit'),
+        editeurBord(m, 'bas', 'Bord du bas'),
+        editeurBord(m, 'haut', 'Bord du haut'),
+        h('label', { texte: 'Obstacles (origine : coin bas gauche du support)' }), h('div', { class: 'defile' }, obs),
         h('div', { class: 'barre' },
           h('button', { class: 'petit', type: 'button', texte: 'Ajouter un obstacle', onclick: function () {
             m.obstacles.push({ libelle: 'obstacle', x: 0, y: 0, largeur: 100, hauteur: 100 }); dessinerMurs(); planifier(); } }),
@@ -260,6 +340,8 @@
       extra.appendChild(h('label', { texte: 'Largeurs utiles dans l\'ordre, répétées jusqu\'en haut du mur' })); extra.appendChild(seq);
     }
     if (o.motif === 'aleatoire') { extra.appendChild(h('label', { texte: 'Graine (change le tirage)' })); extra.appendChild(champ(o, 'graine')); }
+    zone.appendChild(h('label', { texte: 'Coupe des lames longues' }));
+    zone.appendChild(selectOptions('prioriteCoupe', [['chute', 'Économiser les chutes'], ['longueur', 'Couvrir le rang en entier']]));
     zone.appendChild(h('label', { texte: 'Sens de pose' }));
     zone.appendChild(selectOptions('orientation', [['auto', 'Meilleur choix automatique'], ['horizontal', 'Horizontal'], ['vertical', 'Vertical']]));
     zone.appendChild(h('label', { texte: 'Motif des largeurs' }));
@@ -276,7 +358,7 @@
     zone.appendChild(g);
     zone.appendChild(h('label', { texte: 'Ordre de pose des murs (réutilisation des chutes)' }));
     zone.appendChild(selectOptions('ordreMurs', [['auto', 'Ordre le plus économe'], ['donne', 'Ordre de la liste']]));
-    zone.appendChild(h('div', { class: 'note', texte: 'Ces réglages sont des valeurs de départ à ajuster. Champ vide : valeur par défaut du calcul.' }));
+    zone.appendChild(h('div', { class: 'note', texte: 'Ces réglages sont des valeurs de départ à ajuster. Champ vide : valeur par défaut du calcul. La marge au bord ne s\'applique que si les quatre bords du mur sont à ras.' }));
   }
 
   function couleur(cle, res) {
@@ -285,13 +367,34 @@
     return PALETTE[Math.max(0, cles.indexOf(cle)) % PALETTE.length];
   }
 
+  function texteCoupe(p) {
+    var bouts = [];
+    if (p.coupeGauche === '45') bouts.push('45° à gauche');
+    if (p.coupeDroite === '45') bouts.push('45° à droite');
+    if (p.coupeBas === '45') bouts.push('45° en bas');
+    if (p.coupeHaut === '45') bouts.push('45° en haut');
+    return bouts.join(', ');
+  }
+  function etiquetteLongueur(p) {
+    if (p.pointeLongue && p.pointeCourte && Math.abs(p.pointeLongue - p.pointeCourte) > 0.5) {
+      return f(p.pointeLongue) + '/' + f(p.pointeCourte);
+    }
+    return f(p.longueur);
+  }
+
   function svgMur(m, res) {
     var NS = 'http://www.w3.org/2000/svg';
-    var marge = Math.max(m.largeur, m.hauteur) * 0.09;
     var fs = Math.max(m.largeur, m.hauteur) / 62;
     var W = m.largeur, H = m.hauteur;
+    var minX = 0, minY = 0, maxX = W, maxY = H;
+    m.pieces.forEach(function (p) {
+      var y = H - (p.y + p.h);
+      minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x + p.w);
+      minY = Math.min(minY, y); maxY = Math.max(maxY, y + p.h);
+    });
+    var marge = Math.max(m.largeur, m.hauteur) * 0.09;
     var svg = document.createElementNS(NS, 'svg');
-    svg.setAttribute('viewBox', [-marge, -marge, W + 2 * marge, H + 2 * marge].join(' '));
+    svg.setAttribute('viewBox', [minX - marge, minY - marge, (maxX - minX) + 2 * marge, (maxY - minY) + 2 * marge].join(' '));
     svg.setAttribute('xmlns', NS);
     function el(tag, attrs, parent) {
       var e = document.createElementNS(NS, tag);
@@ -307,9 +410,11 @@
     m.pieces.forEach(function (p) {
       var y = H - (p.y + p.h);
       var g = el('g', {});
-      var tip = 'Rang ' + p.rang + ', pièce ' + p.index + ' : ' + f(p.longueur) + ' x ' + f(p.largeurRang) + ' mm'
+      var biseau = texteCoupe(p);
+      var tip = 'Rang ' + p.rang + ', pièce ' + p.index + ' : ' + etiquetteLongueur(p) + ' x ' + f(p.largeurRang) + ' mm'
+        + (p.pointeLongue && p.pointeCourte && Math.abs(p.pointeLongue - p.pointeCourte) > 0.5 ? ' (pointe longue / pointe courte)' : '')
         + (p.origine === 'chute' ? ', issue d\'une chute' : ', lame neuve ' + p.typeId + ' (' + f(p.longueurLame) + ' mm)')
-        + (p.coupe ? ', coupée en bout' : '') + (p.refendu ? ', refendue' : '') + (p.raccord ? ', raccord' : '')
+        + (biseau ? ', ' + biseau : (p.coupe ? ', coupée en bout' : '')) + (p.refendu ? ', refendue' : '') + (p.raccord ? ', raccord' : '')
         + (p.manquante ? ', HORS STOCK' : '') + (p.percements.length ? ', à percer : ' + p.percements.join(', ') : '');
       el('title', { texte: tip }, g);
       el('rect', { x: p.x, y: y, width: p.w, height: p.h, fill: couleur(p.famille, res), stroke: p.manquante ? '#b3261e' : '#fff', 'stroke-width': fs * 0.12 }, g);
@@ -318,9 +423,15 @@
       var longueurPx = horiz ? p.w : p.h, epaisseurPx = horiz ? p.h : p.w;
       if (longueurPx > fs * 4.6 && epaisseurPx > fs * 0.9) {
         var cx = p.x + p.w / 2, cy = y + p.h / 2;
-        var t = el('text', { x: cx, y: cy + fs * 0.33, 'text-anchor': 'middle', 'font-size': fs * 0.78, fill: '#2b2620', 'font-family': 'Helvetica, Arial, sans-serif', texte: f(p.longueur) }, g);
+        var t = el('text', { x: cx, y: cy + fs * 0.33, 'text-anchor': 'middle', 'font-size': fs * 0.78, fill: '#2b2620', 'font-family': 'Helvetica, Arial, sans-serif', texte: etiquetteLongueur(p) }, g);
         if (!horiz) t.setAttribute('transform', 'rotate(-90 ' + cx + ' ' + cy + ')');
       }
+      var trait = Math.max(1, fs * 0.16);
+      var s = Math.min(p.w, p.h) * 0.55;
+      if (p.coupeDroite === '45') el('line', { x1: p.x + p.w, y1: y, x2: p.x + p.w - s, y2: y + p.h, stroke: '#2b2620', 'stroke-width': trait }, g);
+      if (p.coupeGauche === '45') el('line', { x1: p.x, y1: y, x2: p.x + s, y2: y + p.h, stroke: '#2b2620', 'stroke-width': trait }, g);
+      if (p.coupeHaut === '45') el('line', { x1: p.x, y1: y, x2: p.x + p.w, y2: y + s, stroke: '#2b2620', 'stroke-width': trait }, g);
+      if (p.coupeBas === '45') el('line', { x1: p.x, y1: y + p.h, x2: p.x + p.w, y2: y + p.h - s, stroke: '#2b2620', 'stroke-width': trait }, g);
     });
     m.obstacles.forEach(function (ob) {
       var y = H - (ob.y + ob.hauteur);
@@ -361,7 +472,8 @@
     Object.keys(parRang).forEach(function (k) {
       var L = parRang[k].slice().sort(function (a, b) { return (a.raccord ? 1 : 0) - (b.raccord ? 1 : 0) || (m.orientation === 'horizontal' ? a.x - b.x : a.y - b.y); });
       var txt = L.map(function (p) {
-        return f(p.longueur) + (p.origine === 'chute' ? ' (chute)' : '') + (p.raccord ? ' (raccord ' + f(p.largeurRang) + ')' : '') + (p.percements.length ? ' (percer : ' + p.percements.join(', ') + ')' : '');
+        var coupes = texteCoupe(p);
+        return etiquetteLongueur(p) + (coupes ? ' (' + coupes + ')' : '') + (p.origine === 'chute' ? ' (chute)' : '') + (p.raccord ? ' (raccord ' + f(p.largeurRang) + ')' : '') + (p.percements.length ? ' (percer : ' + p.percements.join(', ') + ')' : '');
       }).join('  |  ');
       var r0 = parRang[k].filter(function (p) { return !p.raccord; })[0] || parRang[k][0];
       t.appendChild(h('tr', {}, h('td', { texte: k }), h('td', { texte: f(r0.largeurRang) + (r0.refendu ? ' (refendu)' : '') }), h('td', { texte: txt })));
@@ -373,7 +485,11 @@
     var t = res.total;
     var resume = document.getElementById('zone-resume');
     resume.innerHTML = '';
-    resume.appendChild(h('div', { class: 'note', texte: 'Sens ' + res.parametres.orientation + ', ' + res.parametres.libelleMotif + (res.murs.length > 1 ? '. Ordre de pose : ' + res.parametres.ordreMurs.join(', ') : '') + '.' }));
+    var sensDistincts = {};
+    res.murs.forEach(function (m) { sensDistincts[m.orientation] = true; });
+    var sensTexte = Object.keys(sensDistincts).length === 1 ? ('Sens ' + res.murs[0].orientation) : 'Sens propre à chaque mur';
+    var coupeTexte = res.parametres.options && res.parametres.options.prioriteCoupe === 'longueur' ? ' Lames longues posées sur tout le rang quand elles le peuvent.' : '';
+    resume.appendChild(h('div', { class: 'note', texte: (estRetenue(res) ? 'Disposition retenue. ' : 'Autre essai. ') + sensTexte + ', ' + res.parametres.libelleMotif + (res.murs.length > 1 ? '. Ordre de pose : ' + res.parametres.ordreMurs.join(', ') : '') + '.' + coupeTexte }));
     var kp = h('div', { class: 'kpis' });
     [[t.lamesNeuves, 'lames à découper'], [f(t.chutePct) + ' %', 'chute globale'], [t.pieces, 'pièces posées'], [t.joints, 'joints bout à bout'], [t.coupes, 'coupes en bout'], [t.piecesEnChute, 'pièces issues de chutes']].forEach(function (k) {
       kp.appendChild(h('div', { class: 'kpi' }, h('b', { texte: String(k[0]) }), h('span', { texte: k[1] })));
@@ -396,10 +512,11 @@
     });
     leg.appendChild(h('span', {}, h('span', { class: 'puce', style: 'background: repeating-linear-gradient(45deg,#d9b98a,#d9b98a 3px,#8a5a2b 3px,#8a5a2b 4px)' }), 'pièce issue d\'une chute'));
     res.murs.forEach(function (m, i) {
-      var carte = h('div', { class: 'carte' }, h('h2', { texte: 'Mur ' + m.id + ' : ' + f(m.largeur) + ' x ' + f(m.hauteur) + ' mm, lames ' + (m.orientation === 'horizontal' ? 'horizontales' : 'verticales') }));
+      var carte = h('div', { class: 'carte' }, h('h2', { texte: 'Mur ' + m.id + ' : support ' + f(m.largeur) + ' x ' + f(m.hauteur) + ' mm, lames ' + (m.orientation === 'horizontal' ? 'horizontales' : 'verticales') }));
+      if (m.bords) carte.appendChild(h('div', { class: 'note', texte: 'Gauche : ' + m.bords.gauche + '. Droite : ' + m.bords.droite + '. Bas : ' + m.bords.bas + '. Haut : ' + m.bords.haut + '.' + (m.epaisseurSupport ? ' Support derrière les lames : ' + f(m.epaisseurSupport) + ' mm.' : '') }));
       if (i === 0) carte.appendChild(leg);
       carte.appendChild(svgMur(m, res));
-      carte.appendChild(h('div', { class: 'note', texte: 'Chaque pièce indique sa longueur en mm. La largeur de chaque rang est notée à côté du mur. Survoler une pièce donne le détail.' }));
+      carte.appendChild(h('div', { class: 'note', texte: 'Le cadre est le support. Un vide entre le cadre et les lames est un joint. Une lame qui dépasse le cadre tourne un angle. Un trait en biais marque une coupe à 45°. Quand deux nombres sont écrits, ce sont la pointe longue et la pointe courte.' }));
       var det = h('details', {}, h('summary', { texte: 'Détail des rangs et des pièces (à donner au monteur)' }), tableauRangs(m));
       carte.appendChild(det);
       zm.appendChild(carte);
@@ -416,24 +533,56 @@
     });
     zc.appendChild(tab);
     zc.appendChild(h('p', { class: 'note', texte: 'Chute globale ' + f(t.chutePct) + ' % : ' + f(t.surfaceAchetee) + ' m2 achetés pour ' + f(t.surfaceRevetue) + ' m2 posés. '
-      + (res.chutesRestantes.length ? 'Chutes réutilisables restantes : ' + res.chutesRestantes.length + ' (longueurs en mm : ' + res.chutesRestantes.map(function (c) { return c.longueur + ' x ' + c.largeurRang; }).join(', ') + ').' : 'Aucune chute réutilisable restante.') }));
+      + (res.chutesRestantes.length ? 'Chutes réutilisables restantes : ' + res.chutesRestantes.length + ' (longueurs en mm : ' + res.chutesRestantes.map(function (c) { return c.longueur + ' x ' + c.largeurRang + (c.bout && c.bout !== 'droit' ? ' (déjà à 45°)' : ''); }).join(', ') + ').' : 'Aucune chute réutilisable restante.') }));
+  }
+
+  function estRetenue(actuel) {
+    if (!actuel || !resultatInitial) return false;
+    return actuel.parametres.libelleMotif === resultatInitial.parametres.libelleMotif
+      && actuel.parametres.orientation === resultatInitial.parametres.orientation
+      && JSON.stringify(actuel.parametres.ordreMurs) === JSON.stringify(resultatInitial.parametres.ordreMurs);
+  }
+
+  function restaurerRetenue() {
+    etat.options = JSON.parse(JSON.stringify(etatInitial.options));
+    etat.murs.forEach(function (m) {
+      var src = etatInitial.murs.filter(function (x) { return x.id === m.id; })[0];
+      if (!src) return;
+      if (src.orientation) m.orientation = src.orientation;
+      else delete m.orientation;
+    });
+    dessinerMurs();
+    dessinerOptions();
+    calculer(false);
   }
 
   function dessinerVariantes(liste, actuel) {
     var zone = document.getElementById('zone-variantes');
     zone.innerHTML = '';
-    liste.forEach(function (v) {
+    var sensParMur = etat.murs.some(function (m) { return m.orientation; });
+    var cartes = [];
+    if (resultatInitial) {
+      cartes.push({
+        retenue: true,
+        libelle: resultatInitial.parametres.libelleMotif,
+        total: resultatInitial.total
+      });
+    }
+    liste.forEach(function (v) { cartes.push(v); });
+    cartes.forEach(function (v) {
       var o = v.options;
-      var actif = actuel && actuel.parametres.orientation === v.orientation && actuel.parametres.libelleMotif === v.libelle;
+      var actif = v.retenue ? estRetenue(actuel) : (!estRetenue(actuel) && actuel && actuel.parametres.orientation === v.orientation && actuel.parametres.libelleMotif === v.libelle);
+      var titre = v.retenue ? 'Disposition retenue' : (sensParMur ? ('Essai ' + v.rang) : (v.rang + '. Sens ' + v.orientation));
       var b = h('button', { type: 'button', class: 'variante' + (actif ? ' actif' : ''), onclick: function () {
+        if (v.retenue) { restaurerRetenue(); return; }
+        delete etat.options.famille; delete etat.options.sequence; delete etat.options.graine;
         etat.options.orientation = o.orientation; etat.options.motif = o.motif;
-        delete etat.options.famille; delete etat.options.sequence;
         if (o.famille !== undefined) etat.options.famille = o.famille;
         if (o.sequence) etat.options.sequence = o.sequence.slice();
         if (o.graine !== undefined) etat.options.graine = o.graine;
         dessinerOptions(); calculer(false);
       } },
-        h('b', { texte: v.rang + '. Sens ' + v.orientation }),
+        h('b', { texte: titre }),
         h('small', { texte: v.libelle }),
         h('small', { texte: v.total.lamesNeuves + ' lames, chute ' + f(v.total.chutePct) + ' %' }),
         h('small', { texte: v.total.joints + ' joints, ' + v.total.coupes + ' coupes' + (v.total.lamesManquantes ? ', MANQUE ' + v.total.lamesManquantes : '') }));
@@ -446,6 +595,7 @@
     zoneErr.innerHTML = '';
     if (!Cal) { zoneErr.appendChild(h('div', { class: 'erreur', texte: 'Le moteur de calcul est absent. Régénérer cette page avec la commande « page ».' })); return; }
     try {
+      if (!resultatInitial) resultatInitial = Cal.calculer(etatInitial);
       dernier = Cal.calculer(etat);
       afficher(dernier);
       var libre = JSON.parse(JSON.stringify(etat));
@@ -480,6 +630,8 @@
         if (!lu.lames || !lu.murs) throw new Error('Ce fichier ne contient pas de lames ni de murs.');
         etat = lu; etat.options = etat.options || {};
         etat.murs.forEach(function (m) { m.obstacles = m.obstacles || []; });
+        etatInitial = JSON.parse(JSON.stringify(etat));
+        resultatInitial = null;
         document.getElementById('projet').value = etat.projet || '';
         dessinerLames(); dessinerMurs(); dessinerOptions(); calculer();
       } catch (err) {

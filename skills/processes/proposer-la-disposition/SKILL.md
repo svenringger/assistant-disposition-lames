@@ -93,6 +93,8 @@ Pour chacune, en 3 ou 4 phrases (compétence `esthetique-lames`):
 3. Un compromis ou un risque honnête, avec les avertissements de l'outil expliqués simplement
 4. Un conseil de pose propre à ce mur (`pose-technique-lames`), y compris la compatibilité avec une isolation phonique si le mur en a une
 
+Si un bord est un joint ou un coin, dis la cote du support et la longueur à couvrir. Au coin à 90°, dis quelle face va au fond et quelle face est plus courte, et que ce sens est celui qui ouvre le moins de lames. Au coin à 270°, donne la pointe longue et la pointe courte. Une suite de faces se présente face par face.
+
 Ajoute un petit tableau de comparaison, puis **ta recommandation** et pourquoi. Nomme aussi ce que tu déconseilles.
 
 > «Voici mes [2 ou 3] variantes. Je recommanderais [A] parce que [raison]. Laquelle te parle le plus?»
@@ -108,13 +110,15 @@ Pour un lot, indique aussi l'ordre de pose des murs que l'outil recommande, et c
 
 ← Point de décision
 
-Après confirmation, génère la page avec l'outil (commande `page`, variante choisie) dans le dossier du projet: `disposition.html`. Explique comment l'ouvrir dans un navigateur et ce que l'on peut changer (largeurs, longueurs, ouvertures, réglages) et comparer.
+Après confirmation, génère la page avec la commande `page`, **sans** `--variante`, dans le dossier du projet: `disposition.html`. La page embarque les réglages déjà écrits dans le fichier. `--variante N` les remplacerait par le Nième essai automatique, classé par économie, qui n'est pas forcément la disposition choisie.
 
-Si l'utilisateur modifie des paramètres dans la page, demande-lui de te les redonner ou d'exporter le fichier de paramètres, puis relance le calcul. Ne suppose rien.
+En l'expliquant, dis que la carte encadrée au chargement est la disposition retenue. Les autres cartes sont d'autres essais: elles peuvent utiliser d'autres lames. On peut y changer largeurs, longueurs, ouvertures et réglages. Si la personne décrit un dessin qui ne correspond pas à la disposition retenue, c'est un essai affiché, pas une erreur de calcul.
+
+Si la personne modifie des paramètres dans la page, demande-lui de te les redonner ou d'exporter le fichier de paramètres, puis relance le calcul. Ne suppose rien.
 
 ### 5. Figer la disposition
 
-Quand l'utilisateur a choisi:
+Quand la personne a choisi:
 
 **⚠ Point de décision, avant écriture:**
 > «Je propose de figer la variante [X]: [sens et arrangement], [n] lames, [chute] %, avec ces réglages [liste courte]. J'écris la proposition dans le dossier du projet et je mets à jour les paramètres de calcul. Confirmes-tu?»
@@ -124,10 +128,10 @@ Quand l'utilisateur a choisi:
 Après confirmation:
 - Écris `proposition.md` avec `templates/proposition-disposition_v1.md`
 - Mets à jour `entree.json` avec les options de la variante retenue, pour que la liste et le descriptif reprennent le même calcul
-- Régénère la page pour cette variante
+- Régénère la page depuis le fichier mis à jour, sans `--variante`
 - Consigne `[DECISION: variante X | raison]` et note les `[A VALIDER]` restants
 
-Propose à l'utilisateur de noter dans la mémoire ce qu'il a appris de son goût (par exemple un sens préféré, une largeur qu'il n'aime pas). N'écris dans `memoire.md` qu'après sa confirmation.
+Propose à la personne de noter dans la mémoire ce qu'elle a appris de son goût (par exemple un sens préféré, une largeur qu'elle n'aime pas). N'écris dans `memoire.md` qu'après sa confirmation.
 
 ### 6. Récapitulatif
 
@@ -143,14 +147,17 @@ Propose à l'utilisateur de noter dans la mémoire ce qu'il a appris de son goû
 Le process est terminé quand:
 - L'outil a calculé les variantes et 2 ou 3 ont été argumentées avec chiffres
 - Une page graphique a été produite
-- La variante retenue est enregistrée avec `[DECISION]`, ou l'utilisateur a demandé de la garder ouverte
+- La variante retenue est enregistrée avec `[DECISION]`, ou la personne a demandé de la garder ouverte
 - Le journal est écrit
 
 ## Ce que tu ne fais jamais dans ce process
 
 - Donner une quantité, une chute ou une longueur de coupe qui ne vient pas de l'outil
-- Montrer du code, du JSON ou une commande à l'utilisateur
+- Montrer du code, du JSON ou une commande à la personne
 - Cacher un avertissement de l'outil
 - Recommander sans dire ce que la variante coûte en chute, en joints ou en coupes
 - Figer une variante sans confirmation explicite
 - Présenter le dessin comme une photo du rendu final
+- Passer `--variante` pour produire ou régénérer la page d'une disposition déjà écrite dans le fichier
+- Présenter la première carte comparée comme la disposition retenue
+- Recouper en largeur une lame qui n'est pas la dernière du mur : elle perdrait sa languette

@@ -41,12 +41,23 @@ Les chiffres ci-dessous sont des ordres de grandeur courants, à confirmer.
 
 1. **Acclimater les lames** dans la pièce, à plat, dans leur emballage entrouvert, avant la pose (durée à prendre dans la notice; repère courant: au moins 48 heures).
 2. **Tracer** les repères: niveau de départ, verticales, position des liteaux, ouvertures.
-3. **Choisir le point de départ** avec le monteur: en bas pour un sens horizontal, d'un angle ou centré sur un repère pour un sens vertical. Ce choix change la coupe du dernier rang: il se décide avec la disposition.
+3. **Choisir le point de départ** avec le monteur: en bas pour un sens horizontal, d'un angle ou centré sur un repère pour un sens vertical. Ce choix change la coupe du dernier rang: il se décide avec la disposition. Seule cette dernière lame peut être recoupée en largeur. Les autres gardent leur languette.
 4. **Poser rang après rang**, en contrôlant niveau et aplomb tous les quelques rangs.
 5. **Respecter le décalage des joints** figuré dans la disposition.
 6. **Fixer** selon la notice: clouage ou agrafage dans la languette, clips, ou vis visibles à traiter. Pré-percer les bois durs ou thermo-traités.
 7. **Couper au dernier moment** les pièces prévues par la disposition, et protéger les chants coupés (voir compétence finitions).
 8. **Ouvertures et prises**: raccord de lames autour des fenêtres et portes; rehausses de boîtiers d'encastrement pour que les prises restent affleurantes et accessibles, à faire poser par un électricien.
+
+## Angles, joints et épaisseurs
+
+Les cotes données sont celles du support. La longueur à couvrir se déduit de chaque bord. Un coin à 90° et un coin à 270° ne se coupent pas de la même façon.
+
+- **Joint**: la lame s'arrête avant le bord, coupe droite. Le vide reste vide.
+- **À ras**: la lame arrive au nu du support, coupe droite.
+- **Coin à 90°** (l'angle de la pièce, les deux murs se ferment): on ne coupe pas d'onglet. Une lame va au fond du coin, coupe droite, bout appuyé sur le lambourdage de l'autre mur. L'autre lame vient s'appuyer contre elle, coupe droite, plus courte de l'épaisseur de la lame plus celle du lambourdage. Le calcul choisit celle qui va au fond : d'abord le sens qui ouvre le moins de lames, ensuite celui qui coupe le moins. Si tout se vaut, la face la plus longue va au fond. À longueur égale, c'est la première de la liste.
+- **Coin à 270°** (le coin avance vers la pièce): les deux faces sont coupées à 45° pour que le coin soit net. La pointe longue dépasse le mur du lambourdage plus l'épaisseur de la lame. La pointe courte ne dépasse que du lambourdage.
+- Chaque bord se décide seul. Une crédence ou un retour est une suite de faces, pas un mur plan. Sur un coin à 90°, le calcul relie les deux faces et choisit qui va au fond. Un choix écrit à la main prime.
+- Un biseau dans le sens de la longueur du rang ne concerne que le coin à 270°. Il se réserve dans le calcul. Le monteur le réalise sur le chant du premier ou du dernier rang.
 
 ## Jeux et dilatation
 
@@ -61,7 +72,6 @@ Les lames **n'isolent pas** le bruit. Si un système phonique est déjà en plac
 - Si le mur est mitoyen, le règlement de la copropriété ou de la gérance peut s'appliquer: rappel `[ATTENTION]`.
 
 Le détail d'une isolation déjà documentée se lit dans les documents fournis. Ne le réinvente pas: appuie-toi sur ces documents pour l'épaisseur et la nature des couches.
-
 
 ## Sécurité et règlements
 

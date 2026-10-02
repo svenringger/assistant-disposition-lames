@@ -29,15 +29,18 @@ Projet: SLUG (mur ou lot)
 
 ## Rang par rang
 
-| Rang | Largeur de lame | Pièces (longueurs en mm) | Remarques |
-|------|-----------------|--------------------------|-----------|
-| [A COMPLETER] | [A COMPLETER] | [A COMPLETER] | [A COMPLETER] |
+| Rang | Largeur de lame | Pièces (mm) | Remarques |
+|------|-----------------|-------------|-----------|
+| [A COMPLETER] | [A COMPLETER] | [A COMPLETER: longueur, ou pointe longue / pointe courte si la coupe est à 45°] | [A COMPLETER: coupe droite ou 45°, côté concerné] |
 
 Le détail à l'échelle est dans la page de disposition: [A COMPLETER: chemin].
 
 ## Ouvertures, prises et angles
 
-- [A COMPLETER: raccords autour des fenêtres et portes, rehausses de boîtiers, traitement des angles]
+- [A COMPLETER: raccords autour des fenêtres et portes, rehausses de boîtiers]
+- Coin à 90°: coupe droite. [A COMPLETER: quelle face va au fond, quelle face s'arrête et de combien elle est plus courte. Le sens retenu est celui qui ouvre le moins de lames]
+- Coin à 270°: coupe à 45°. Pointe longue et pointe courte
+- Support derrière les lames: [A COMPLETER: épaisseur du liteau ou de la lambourde, ou 0]
 
 ## Fixation et jeux
 

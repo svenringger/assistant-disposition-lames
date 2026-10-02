@@ -55,7 +55,7 @@ Sans cet outil, le calcul et la page fonctionnent quand même, à la main, avec 
 
 ## Comment ça marche
 
-1. Tu décris le mur (largeur, hauteur, ouvertures) et les lames (largeur utile, longueur, quantité si tu en as déjà).
+1. Tu décris le mur (largeur et hauteur du support, bords, ouvertures) et les lames (largeur utile, longueur, épaisseur, quantité si tu en as déjà).
 2. L'outil compare plusieurs dispositions: sens horizontal ou vertical, une seule largeur ou un rythme de largeurs.
 3. La page montre chaque lame à l'échelle, avec sa longueur.
 4. Une fois le choix figé, tu obtiens la liste des lames (une seule liste si plusieurs murs partagent les chutes) et un descriptif pour le monteur.
@@ -82,8 +82,9 @@ Le détail des réglages est dans `tools/calepinage_v1.md`.
 
 ## Limites
 
-- Lames droites seulement. Pas de diagonale ni de chevron.
-- Murs rectangulaires. Pas de pente ni de forme irrégulière.
+- Lames droites: pas de chevron ni de pose en diagonale. Un coin à 90° s'aboutit, sans coupe en biais. Un coin à 270° se coupe à 45°.
+- Chaque face est un rectangle. Pas de pente ni de forme irrégulière. Une crédence ou un retour se saisit face par face.
+- Un joint de bord, ou l'épaisseur d'un liteau derrière les lames, change la longueur à couvrir. La cote saisie reste celle du support.
 - Les valeurs de départ (décalage des joints, marge à l'achat) sont des réglages, pas des règles de l'art. La notice du fabricant prime.
 - L'assistant propose. Il ne remplace pas un menuisier.
 

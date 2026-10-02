@@ -10,6 +10,10 @@
  *   node calepinage_v1.cjs liste     <entree.json> [--variante N] [réglages]
  *   node calepinage_v1.cjs page      <entree.json> --sortie <fichier.html> [--variante N] [réglages]
  *
+ * --variante N remplace les réglages du fichier par le Nième essai automatique
+ * (classé par économie). Pour la disposition déjà écrite dans le fichier, ne pas le passer.
+ * La page s'ouvre alors sur cette disposition. Les autres cartes sont des essais.
+ *
  * <entree.json> peut être "-" pour lire l'entrée standard.
  *
  * Réglages (remplacent les options du fichier) :

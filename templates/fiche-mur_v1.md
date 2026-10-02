@@ -18,10 +18,21 @@ Lot: [A COMPLETER: aucun, ou nom du lot]
 
 | Élément | Valeur (mm) |
 |---------|-------------|
-| **Largeur** | [A COMPLETER] |
-| **Hauteur** | [A COMPLETER] |
+| **Largeur du support** | [A COMPLETER] |
+| **Hauteur du support** | [A COMPLETER] |
+| **Épaisseur d'un liteau ou d'une lambourde** | [A COMPLETER: 0 si les lames sont fixées sur le mur] |
 | **Écarts constatés** | [A COMPLETER: plafond ou sol non horizontal, mur non plan] |
-| **Réserve en bord** | [A COMPLETER: plinthe, moulure, corniche] |
+
+Ces cotes sont celles du support. La longueur à couvrir se calcule ensuite, bord par bord.
+
+| Bord | Situation | Détail |
+|------|-----------|--------|
+| **Gauche** | [A COMPLETER: à ras / joint / coin à 90° / coin à 270°] | [A COMPLETER: mm du joint, face voisine au coin à 90° (le calcul choisit qui va au fond), ou coin à 270° en coupe à 45°] |
+| **Droite** | [A COMPLETER] | [A COMPLETER] |
+| **Bas** | [A COMPLETER] | [A COMPLETER] |
+| **Haut** | [A COMPLETER] | [A COMPLETER] |
+
+Si plusieurs faces se suivent, chacune a sa fiche. L'angle entre deux faces est noté sur le bord concerné, pas comme un grand mur plan.
 
 ## Ouvertures et passages
 

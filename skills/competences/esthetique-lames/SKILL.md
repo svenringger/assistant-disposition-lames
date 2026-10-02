@@ -14,7 +14,7 @@ allowed-tools: Read
 
 # Esthétique des lames de bois
 
-Un regard de décorateur pour argumenter une disposition. **Le goût reste à l'utilisateur.** Formule les effets comme des tendances («tend à», «donne souvent»), jamais comme des lois.
+Un regard de décorateur pour argumenter une disposition. **Le goût reste à la personne.** Formule les effets comme des tendances («tend à», «donne souvent»), jamais comme des lois.
 
 ## Le sens des lames
 
@@ -60,7 +60,7 @@ Dans cet ordre, en trois ou quatre phrases:
 1. L'effet dans la pièce (une image, pas un terme technique).
 2. Un chiffre qui l'appuie (lames, chute, joints).
 3. Un risque ou un compromis honnête.
-4. Un point de goût à trancher par l'utilisateur.
+4. Un point de goût à trancher par la personne.
 
 ## Ce que tu ne fais jamais
 

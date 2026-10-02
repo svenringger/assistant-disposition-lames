@@ -63,12 +63,12 @@ Transformer une disposition figée en deux documents utilisables: la liste des l
 
 Demande à l'utilisateur, s'il n'est pas évident:
 - **Le projet**: quel mur ou quel lot
-- **Qui pose**: toi-même ou un monteur (adapte le ton du descriptif)
+- **Qui pose**: la personne elle-même ou un monteur (adapte le ton du descriptif)
 
 Avant de commencer:
 - Lis `proposition.md`, la fiche et `entree.json` du projet. **Si aucune variante n'est figée** (pas de `[DECISION]` dans la proposition), propose de repasser par `proposer-la-disposition` et arrête-toi là
-- Lis `donnees/memoire.md` (fournisseurs, mode de pose, stock restant)
-- Si une isolation phonique est décrite dans des documents fournis, lis-les pour connaître l'épaisseur et la nature des couches
+- Lis `memoire.md` (fournisseurs, mode de pose, stock restant)
+- Si le projet est lié à une isolation phonique, lis la fiche du projet lié et ses ressources sur le système posé
 - Si `journal/` contient des entrées récentes liées, lis-les
 
 ## Étapes
@@ -83,9 +83,9 @@ Contrôle en une liste courte: disposition figée, cotes confirmées, lames conf
 
 ### 2. Produire la liste des lames
 
-Lance l'outil (commande `liste`) sur `entree.json`, avec la variante figée. Pour un lot, la liste est **consolidée**: un seul tableau de commande pour tous les murs, avec la répartition par mur.
+Lance l'outil (commande `liste`) sur `entree.json`, sans `--variante`: la variante figée est celle déjà écrite dans le fichier. Pour un lot, la liste est **consolidée**: un seul tableau de commande pour tous les murs, avec la répartition par mur.
 
-Prépare, sans code ni JSON, pour l'utilisateur:
+Prépare, sans code ni JSON, pour la personne:
 - Quantité nécessaire, marge de commande et quantité à commander par type de lame, avec les paquets
 - Prix indicatif si les prix sont connus, sinon `[A COMPLETER: prix]`
 - Ce que les chutes de ce projet permettent de garder pour la suite
@@ -97,8 +97,8 @@ Avec `templates/descriptif-monteur_v1.md` et le détail rang par rang de l'outil
 - Ce qu'on veut obtenir, sens, point de départ, arrangement des largeurs, dernier rang
 - Support à contrôler, préparation, acclimatation, finition avant pose
 - Fixation et jeux, **selon la notice**, avec la compatibilité phonique si elle s'applique (rien ne doit retraverser l'isolation)
-- Ouvertures, raccords, prises et angles
-- Coupes sur place et protection des chants
+- Ouvertures, raccords, prises et coins. Au coin à 90°, coupe droite: quelle lame va au fond, quelle lame est plus courte, et pourquoi ce sens économise les lames. Au coin à 270°, pointe longue et pointe courte
+- Coupes sur place et protection des chants. Une chute à 45° ne se repose pas comme une chute droite
 - Points de vigilance en `[ATTENTION]`
 
 Fais un dernier regard esthétique (`esthetique-lames`): alignements sur les repères de la pièce, position des joints près des ouvertures.
@@ -139,8 +139,8 @@ Propose, une chose à la fois, ce qui vaut d'être retenu: chutes réutilisables
 Le process est terminé quand:
 - La liste des lames et le descriptif existent dans le dossier du projet
 - Chaque quantité de la liste vient de l'outil
-- Les `[A COMPLETER]` restants sont listés à l'utilisateur
-- La mémoire a été mise à jour uniquement avec ce que l'utilisateur a confirmé
+- Les `[A COMPLETER]` restants sont listés à la personne
+- La mémoire a été mise à jour uniquement avec ce que la personne a confirmé
 - Le journal est écrit
 
 ## Ce que tu ne fais jamais dans ce process

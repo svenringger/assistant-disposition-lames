@@ -79,10 +79,13 @@ Si le stock restant de la mémoire peut servir à ce mur, dis-le tout de suite.
 ### 2. Relever le mur
 
 Une question à la fois. Demande des cotes **mesurées**, pas lues sur un plan:
-1. Largeur et hauteur du mur
-2. Chaque ouverture ou passage: position depuis l'angle en bas à gauche, largeur et hauteur
-3. Support: maçonnerie, cloison en plaques, mur plâtré
-4. Isolation phonique existante ou prévue, mur mitoyen, pièce humide, réserve pour plinthe ou moulure
+1. Largeur et hauteur du support, mesurées. Dis que ce ne sont pas encore les longueurs à couvrir
+2. Chaque bord, gauche, droite, bas, haut: à ras, joint (largeur en mm), ou angle
+3. Pour un coin à 90°: le nom de chaque face voisine. Le calcul décide qui va au fond pour ouvrir le moins de lames. Ne demande quelle face va au fond que si la personne veut l'imposer. Pour un coin à 270°: les deux faces à 45°. Épaisseur de la lame, épaisseur du lambourdage (0 si la lame est sur le mur)
+4. Si plusieurs faces se suivent (crédence, retour): chaque face est un mur du lot, dans l'ordre, avec l'angle entre elles. Ne les saisis pas comme un seul rectangle
+5. Chaque ouverture ou passage: position depuis l'angle en bas à gauche, largeur et hauteur
+6. Nature du support: maçonnerie, cloison en plaques, mur plâtré
+7. Isolation phonique existante ou prévue, mur mitoyen, pièce humide, réserve pour plinthe ou moulure
 
 Pour chaque manque: `[A COMPLETER: ...]`. Si l'information est douteuse, propose de la mesurer, ne l'invente pas.
 
@@ -90,7 +93,7 @@ Pour chaque manque: `[A COMPLETER: ...]`. Si l'information est douteuse, propose
 
 Selon le mode:
 - **Stock**: pour chaque type de lame, largeur utile, longueur, épaisseur, quantité, et si elle peut être recoupée en largeur
-- **Achat**: le catalogue du fournisseur (largeurs, longueurs, prix, lames par paquet). Si l'utilisateur ne sait pas encore, note-le et propose de comparer des largeurs à l'étape suivante
+- **Achat**: le catalogue du fournisseur (largeurs, longueurs, prix, lames par paquet). Si la personne ne sait pas encore, note-le et propose de comparer des largeurs à l'étape suivante
 
 Pour un produit nommé, lis la fiche technique du fabricant et note la source.
 
@@ -113,10 +116,10 @@ Après confirmation:
 - **Un seul mur**: crée `donnees/murs/<slug>/` avec `fiche.md` (template `fiche-mur_v1.md`) et `entree.json`
 - **Un lot**: crée `donnees/lots/<slug>/` avec une fiche par mur (`fiche-<mur>.md`) et **un seul** `entree.json` qui contient tous les murs; la table des lames vit dans la première fiche
 - Si le mur rejoint un lot existant: ajoute le mur au `entree.json` du lot et sa fiche
-- Le `entree.json` reprend uniquement ce que l'utilisateur a confirmé. Ce qui manque reste dans la fiche en `[A COMPLETER]` et le calcul attend
+- Le `entree.json` reprend uniquement ce que la personne a confirmé. Ce qui manque reste dans la fiche en `[A COMPLETER]` et le calcul attend
 - Consigne les `[DECISION: ...]`
 
-Vérifie ensuite que le fichier est lisible par l'outil: lance `calculer` et lis le résultat. S'il signale une erreur de saisie, corrige avec l'utilisateur avant de continuer.
+Vérifie ensuite que le fichier est lisible par l'outil: lance `calculer` et lis le résultat. S'il signale une erreur de saisie, corrige avec la personne avant de continuer.
 
 ### 6. Récapitulatif et suite
 
@@ -136,7 +139,7 @@ Si oui, poursuis avec le process `proposer-la-disposition`.
 ## Preuve d'achèvement
 
 Le process est terminé quand:
-- La fiche existe et les `[A COMPLETER]` restants sont listés à l'utilisateur
+- La fiche existe et les `[A COMPLETER]` restants sont listés à la personne
 - Le fichier de calcul a été lu par l'outil sans erreur
 - Les décisions sont consignées et le journal est écrit
 

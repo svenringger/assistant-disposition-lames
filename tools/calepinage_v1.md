@@ -24,8 +24,8 @@ Script déterministe: mêmes entrées, mêmes résultats. Il ne décide de rien:
 invoke_tool("calepinage-lames", ["exemple"])
 invoke_tool("calepinage-lames", ["calculer",  "<chemin>/entree.json"])
 invoke_tool("calepinage-lames", ["variantes", "<chemin>/entree.json", "--max", "6"])
-invoke_tool("calepinage-lames", ["liste",     "<chemin>/entree.json", "--variante", "1"])
-invoke_tool("calepinage-lames", ["page",      "<chemin>/entree.json", "--sortie", "<chemin>/disposition.html", "--variante", "1"])
+invoke_tool("calepinage-lames", ["liste",     "<chemin>/entree.json"])
+invoke_tool("calepinage-lames", ["page",      "<chemin>/entree.json", "--sortie", "<chemin>/disposition.html"])
 ```
 
 | Commande | Effet |
@@ -33,8 +33,12 @@ invoke_tool("calepinage-lames", ["page",      "<chemin>/entree.json", "--sortie"
 | `exemple` | Affiche un fichier d'entrée modèle |
 | `calculer` | Compte rendu français du calcul avec les réglages du fichier |
 | `variantes` | Compare plusieurs sens et arrangements, classés du meilleur au moins bon |
-| `liste` | Liste des lames à commander ou à sortir du stock (avec `--variante N` pour une variante précise) |
-| `page` | Écrit une page HTML autonome et dynamique (écriture: point de décision préalable) |
+| `liste` | Liste des lames à commander ou à sortir du stock, selon les réglages du fichier |
+| `page` | Écrit une page HTML autonome et dynamique (écriture: point de décision préalable). Elle s'ouvre sur les réglages du fichier: c'est la disposition retenue. Les autres cartes sont des essais |
+
+`--variante N` est facultatif, pour `liste`, `calculer` et `page`. Il **remplace** les réglages du fichier par le Nième essai automatique, classé par économie. Ce n'est pas la disposition déjà écrite dans le fichier. Pour publier ou relire une disposition figée, ne pas passer `--variante`.
+
+`options.prioriteCoupe` vaut `chute` par défaut : le calcul évite d'ouvrir une lame longue quand le bout restant est inutilisable. `longueur` pose la lame la plus longue qui couvre le rang, même si un petit bout se perd. Ne change le défaut que si l'utilisateur l'a choisi.
 
 Ajouter `--json` à `calculer` ou `variantes` pour un résultat lisible par machine. `-` à la place du fichier lit l'entrée standard.
 
@@ -43,7 +47,11 @@ Ajouter `--json` à `calculer` ou `variantes` pour un résultat lisible par mach
 Un fichier JSON avec quatre parties:
 - `projet`: nom du projet
 - `lames`: pour chaque type de lame, `id`, `largeurUtile`, `longueur` (mm), et selon le cas `epaisseur`, `famille`, `quantite` (absente = achat sans limite), `prix`, `lamesParPaquet`, `refendable`, `libelle`
-- `murs`: pour chaque mur, `id`, `largeur`, `hauteur` (mm), `orientation` (auto, horizontal, vertical) et `obstacles` (`x`, `y` depuis l'angle en bas à gauche, `largeur`, `hauteur`, `libelle`, `type`: `ouverture` ou `trou`)
+- `murs`: pour chaque face, `id`, `largeur` et `hauteur` du **support** (mm), `orientation` (auto, horizontal, vertical), `epaisseurSupport` (liteau ou lambourde, 0 si la lame est sur le mur), `bords` et `obstacles`
+- `bords`: `gauche`, `droite`, `bas`, `haut`. Chacun est `ras` (coupe droite), `joint` (largeur en mm, coupe droite, le vide reste vide) ou `angle`. Un coin à 90° (`sens` rentrant, `coupe` `auto`) est une coupe droite: le calcul choisit la face qui va au fond, l'autre est plus courte de l'épaisseur de la lame plus celle du lambourdage. `passe` ou `arrete` impose ce choix. Un coin à 270° (`sens` sortant, `coupe` 45) coupe les deux faces en onglet. Nomme `voisin` pour relier les deux faces. Sans bords, ou si les quatre sont à ras, la marge de bord s'applique
+- `obstacles`: `x`, `y` depuis l'angle en bas à gauche du support, `largeur`, `hauteur`, `libelle`, `type`: `ouverture` ou `trou`
+
+Une crédence ou un retour est plusieurs faces dans le même lot, dans l'ordre, avec l'angle noté sur le bord qui les relie. Ce n'est pas un seul rectangle.
 - `options`: réglages, tous facultatifs
 
 Plusieurs murs dans un même fichier forment un **lot**: les chutes d'un mur servent aux suivants et la liste de commande est unique.
@@ -59,21 +67,8 @@ Ce sont des réglages modifiables, pas des règles. Le sens de chaque réglage e
 - Français: comptes rendus. Les erreurs de saisie sont en français avec code de sortie 1.
 - La page produite embarque le même moteur: elle recalcule quand on change une largeur, une longueur, un obstacle ou un réglage, et permet d'exporter une liste (CSV) et un dessin (SVG). Elle s'ouvre dans un navigateur, hors ligne.
 
-## Sans autre installation
-
-Depuis la racine de ce projet:
-
-```text
-node tools/calepinage_v1.cjs calculer  exemple/entree.json
-node tools/calepinage_v1.cjs variantes exemple/entree.json --max 6
-node tools/calepinage_v1.cjs liste     exemple/entree.json --variante 1
-node tools/calepinage_v1.cjs page      exemple/entree.json --sortie exemple/disposition.html --variante 1
-```
-
-Il faut Node.js. Aucun paquet à installer.
-
 ## Limites
 
-- Lames droites seulement: pas de diagonale ni de chevron.
-- Murs rectangulaires: pas de pente ni de mur de forme irrégulière.
+- Lames droites: pas de chevron ni de pose en diagonale. Le coin à 90° est une coupe droite. Le coin à 270° est une coupe à 45°. Un biseau sur la longueur d'un rang est signalé, il n'est pas dessiné.
+- Chaque face est un rectangle: pas de pente ni de mur de forme irrégulière. Une suite de faces se saisit face par face.
 - Les hypothèses (jeu, décalage, marge) sont des réglages, pas des vérités: la notice du fabricant prime.

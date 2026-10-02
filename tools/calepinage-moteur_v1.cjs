@@ -7,8 +7,14 @@
  * Entrée (objet JSON) : { projet, lames[], murs[], options{} }
  *   lames[] : { id, largeurUtile, longueur, epaisseur?, famille?, quantite? (vide = illimité),
  *               prix?, lamesParPaquet?, refendable? (défaut vrai), libelle? }   dimensions en mm
- *   murs[]  : { id, largeur, hauteur, orientation?, obstacles[] : { x, y, largeur, hauteur, libelle? } }
- *             origine des coordonnées : coin bas gauche du mur, y vers le haut
+ *   murs[]  : { id, largeur, hauteur, orientation?, epaisseurSupport?, bords?, obstacles[] }
+ *             largeur et hauteur = support (mur, meuble), pas forcément la face habillée
+ *             bords : { gauche, droite, bas, haut } chacun { type: ras|joint|angle,
+ *               joint?, sens?: sortant|rentrant, coupe?: 45|passe|arrete,
+ *               epaisseurRencontre?, voisin? }
+ *             sans bords, ou si les quatre sont à ras : margeBord s'applique comme avant
+ *             obstacles[] : { x, y, largeur, hauteur, libelle? }
+ *             origine des coordonnées : coin bas gauche du support, y vers le haut
  *   options : voir DEFAUTS (réglages modifiables, jamais des règles de l'art)
  *
  * Principe : un mur est couvert par des rangs (largeurs de lames empilées). Chaque rang est rempli
@@ -41,7 +47,8 @@
     margeCommandePct: 10,
     pasCoupe: 5,
     tailleTrouMax: 250,
-    ordreMurs: 'auto'
+    ordreMurs: 'auto',
+    prioriteCoupe: 'chute'
   };
 
   var OPTIONS_NUMERIQUES = ['jeuEntreLames', 'decalageMin', 'longueurMinPiece', 'largeurMinBord',
@@ -76,6 +83,7 @@
       if (!isFinite(o[k]) || o[k] < 0) erreurs.push('Option ' + k + ' invalide.');
     });
     if (!(o.pasCoupe > 0)) erreurs.push('Option pasCoupe invalide.');
+    if (o.prioriteCoupe !== 'chute' && o.prioriteCoupe !== 'longueur') erreurs.push('Option prioriteCoupe invalide.');
 
     var familles = {};
     var cles = [];
@@ -141,7 +149,41 @@
         }
       });
       var orient = (m.orientation === 'horizontal' || m.orientation === 'vertical') ? m.orientation : null;
-      return { id: id, largeur: W, hauteur: H, obstacles: obstacles, orientation: orient };
+      var support = (m.epaisseurSupport === undefined || m.epaisseurSupport === null || m.epaisseurSupport === '') ? 0 : num(m.epaisseurSupport);
+      if (!(support >= 0)) erreurs.push('Mur ' + id + ' : épaisseur de support invalide.');
+      var bords = null;
+      if (m.bords) {
+        bords = {};
+        ['gauche', 'droite', 'bas', 'haut'].forEach(function (nom) {
+          var b = m.bords[nom] || {};
+          var type = (b.type === 'joint' || b.type === 'angle') ? b.type : 'ras';
+          var out = { type: type };
+          if (type === 'joint') {
+            var j = (b.joint === undefined || b.joint === null || b.joint === '') ? 0 : num(b.joint);
+            if (!(j >= 0)) erreurs.push('Mur ' + id + ', bord ' + nom + ' : joint invalide.');
+            out.joint = j;
+          }
+          if (type === 'angle') {
+            out.sens = b.sens === 'sortant' ? 'sortant' : 'rentrant';
+            if (out.sens === 'sortant') {
+              out.coupe = (b.coupe === 'passe' || b.coupe === 'arrete') ? b.coupe : '45';
+            } else if (b.coupe === 'arrete' || b.coupe === 'passe') {
+              out.coupe = b.coupe;
+            } else {
+              out.coupe = 'auto';
+              if (b.coupe === '45') {
+                avert.push('Mur ' + id + ', bord ' + nom + ' : un coin à 90° ne se coupe pas à 45°. Le calcul choisit la face qui va au fond.');
+              }
+            }
+            var er = (b.epaisseurRencontre === undefined || b.epaisseurRencontre === null || b.epaisseurRencontre === '') ? 0 : num(b.epaisseurRencontre);
+            if (!(er >= 0)) erreurs.push('Mur ' + id + ', bord ' + nom + ' : retrait de coin invalide.');
+            out.epaisseurRencontre = er;
+            out.voisin = b.voisin ? String(b.voisin) : '';
+          }
+          bords[nom] = out;
+        });
+      }
+      return { id: id, largeur: W, hauteur: H, obstacles: obstacles, orientation: orient, epaisseurSupport: support, bords: bords };
     });
     if (!murs.length) erreurs.push('Aucun mur déclaré.');
 
@@ -216,10 +258,11 @@
     return res;
   }
 
-  function planifierRangs(V, cycle, norm, avert, idMur) {
+  function planifierRangs(V, cycle, norm, avert, idMur, vDebut, vFin) {
     var o = norm.o, g = o.jeuEntreLames, F = norm.familles;
-    var vFin = V - o.margeBord;
-    var pos = o.margeBord;
+    if (vDebut === undefined) vDebut = o.margeBord;
+    if (vFin === undefined) vFin = V - o.margeBord;
+    var pos = vDebut;
     var rangs = [];
     var i = 0;
     while (true) {
@@ -230,29 +273,36 @@
         i++;
       } else break;
     }
-    var dernier = rangs.length ? rangs[rangs.length - 1].v1 : o.margeBord;
+    function poserDernier(debut, largeur) {
+      var cand = norm.cles.filter(function (k) { return F[k].largeurUtile >= largeur - EPS; });
+      var refendables = cand.filter(function (k) { return F[k].refendable; });
+      var choix = (refendables.length ? refendables : cand)[0];
+      if (!choix) {
+        avert.push('Mur ' + idMur + ' : aucune lame assez large pour le dernier rang de ' + texte(largeur) + ' mm.');
+        return;
+      }
+      var refendu = largeur < F[choix].largeurUtile - EPS;
+      if (refendu && !F[choix].refendable) avert.push('Mur ' + idMur + ' : le dernier rang exige de refendre une lame déclarée non refendable.');
+      rangs.push({ v0: debut, v1: vFin, largeur: largeur, source: choix, refendu: refendu });
+    }
+    var dernier = rangs.length ? rangs[rangs.length - 1].v1 : vDebut;
     var reste = vFin - dernier - (rangs.length ? g : 0);
     if (reste > 0.5) {
-      var debut = rangs.length ? dernier + g : o.margeBord;
+      var debut = rangs.length ? dernier + g : vDebut;
       if (reste >= o.largeurMinBord || !rangs.length) {
-        var cand = norm.cles.filter(function (k) { return F[k].largeurUtile >= reste - EPS; });
-        var refendables = cand.filter(function (k) { return F[k].refendable; });
-        var choix = (refendables.length ? refendables : cand)[0];
-        if (!choix) {
-          avert.push('Mur ' + idMur + ' : aucune lame assez large pour le dernier rang de ' + texte(reste) + ' mm.');
-        } else {
-          if (!F[choix].refendable) avert.push('Mur ' + idMur + ' : le dernier rang exige de refendre une lame déclarée non refendable.');
-          rangs.push({ v0: debut, v1: vFin, largeur: reste, source: choix, refendu: reste < F[choix].largeurUtile - EPS });
-        }
+        poserDernier(debut, reste);
       } else {
-        var last = rangs.pop();
-        var wnew = (last.largeur + reste) / 2;
-        if (wnew < o.largeurMinBord) avert.push('Mur ' + idMur + ' : les deux derniers rangs restent plus étroits que ' + texte(o.largeurMinBord) + ' mm.');
-        if (!F[last.source].refendable) avert.push('Mur ' + idMur + ' : le rééquilibrage des derniers rangs exige de refendre une lame non refendable.');
-        var a = { v0: last.v0, v1: last.v0 + wnew, largeur: wnew, source: last.source, refendu: true };
-        var b = { v0: a.v1 + g, v1: vFin, largeur: wnew, source: last.source, refendu: true };
-        rangs.push(a, b);
-        avert.push('Mur ' + idMur + ' : reste de ' + texte(reste) + ' mm rééquilibré sur les deux derniers rangs (' + texte(wnew) + ' mm chacun).');
+        var last = rangs[rangs.length - 1];
+        var combine = vFin - last.v0;
+        var assezLarge = norm.cles.some(function (k) { return F[k].refendable && F[k].largeurUtile >= combine - EPS; });
+        if (assezLarge) {
+          rangs.pop();
+          poserDernier(last.v0, combine);
+          avert.push('Mur ' + idMur + ' : il reste ' + texte(reste) + ' mm, trop peu pour un rang. Seule la dernière lame est recoupée en largeur, à ' + texte(combine) + ' mm. La lame d\'avant garde sa largeur, et donc sa languette.');
+        } else {
+          poserDernier(debut, reste);
+          avert.push('Mur ' + idMur + ' : il reste ' + texte(reste) + ' mm. Ce dernier rang est plus étroit que ' + texte(o.largeurMinBord) + ' mm. On ne recoupe pas la lame d\'avant : elle perdrait sa languette.');
+        }
       }
     }
     return rangs;
@@ -281,11 +331,14 @@
     return l * 0.1;
   }
 
-  function evaluer(L, c, r, prev, dec, o, interdits) {
-    if (L >= r - EPS) return { e: r, cout: coutChute(L - r, o) };
+  function evaluer(L, c, r, prev, dec, o, interdits, extra) {
+    if (!extra) extra = function () { return 0; };
+    function tient(e) { return e + extra(e) <= L + EPS; }
+    if (tient(r)) return { e: r, cout: coutChute(L - r - extra(r), o) };
     var emax = Math.min(L, r - o.longueurMinPiece);
     var best = null;
     for (var e = emax; e >= o.longueurMinPiece - EPS; e -= o.pasCoupe) {
+      if (!tient(e)) continue;
       var pos = c + e;
       var ok = true;
       for (var k = 0; k < prev.length; k++) {
@@ -296,7 +349,7 @@
         if (pos > interdits[q][0] - EPS && pos < interdits[q][1] + EPS) ok = false;
       }
       if (!ok) continue;
-      var cout = coutChute(L - e, o);
+      var cout = coutChute(L - e - extra(e), o);
       if (!best || cout < best.cout - 1e-9) best = { e: e, cout: cout };
       if (best.cout <= 1e-9) break;
     }
@@ -311,45 +364,75 @@
     return 0;
   }
 
-  function choisirPiece(ctx, rang, c, r, prev, interdits) {
+  function longueurUtilisable(L, bout, besoin, E) {
+    if (!bout || bout === 'droit' || bout === besoin) return L;
+    var L2 = L - (E || 0);
+    return L2 > EPS ? L2 : 0;
+  }
+
+  function choisirPiece(ctx, rang, c, r, prev, interdits, besoin) {
     var o = ctx.o;
+    besoin = besoin || { bout: 'droit', supDebut: 0, supFin: 0, E: 0 };
     var fam = ctx.familles[rang.source];
     var cle = rang.source + '@' + arrondi(rang.largeur);
     var pool = ctx.pool[cle] || (ctx.pool[cle] = []);
     var base = [];
-    pool.forEach(function (it, idx) { base.push({ origine: 'chute', L: it.L, idx: idx, typeId: it.typeId }); });
-    fam.types.forEach(function (t) {
-      base.push({ origine: ctx.restant[t.id] > 0 ? 'neuve' : 'manquante', L: t.longueur, type: t, typeId: t.id });
+    pool.forEach(function (it, idx) {
+      var Lu = longueurUtilisable(it.L, it.bout || 'droit', besoin.bout, besoin.E);
+      if (Lu > EPS) base.push({ origine: 'chute', L: Lu, Lbrut: it.L, idx: idx, typeId: it.typeId, bout: it.bout || 'droit' });
     });
+    fam.types.forEach(function (t) {
+      base.push({ origine: ctx.restant[t.id] > 0 ? 'neuve' : 'manquante', L: t.longueur, Lbrut: t.longueur, type: t, typeId: t.id, bout: 'droit' });
+    });
+    function extra(e) { return besoin.supDebut + (e >= r - EPS ? besoin.supFin : 0); }
     var decs = [o.decalageMin, o.decalageMin / 2, 0];
     for (var d = 0; d < decs.length; d++) {
       var best = null;
       for (var i = 0; i < base.length; i++) {
-        var ev = evaluer(base[i].L, c, r, prev, decs[d], o, d < 2 ? interdits : []);
+        var ev = evaluer(base[i].L, c, r, prev, decs[d], o, d < 2 ? interdits : [], extra);
         if (!ev) continue;
         var cout = ev.cout + (base[i].origine === 'manquante' ? 1e6 : 0);
-        var k = [cout, base[i].origine === 'chute' ? 0 : 1, -ev.e];
+        var k = o.prioriteCoupe === 'longueur'
+          ? [base[i].origine === 'manquante' ? 1 : 0, -ev.e, ev.cout, base[i].origine === 'chute' ? 0 : 1]
+          : [cout, base[i].origine === 'chute' ? 0 : 1, -ev.e];
         if (!best || comparerCles(k, best.k) < 0) best = { cand: base[i], e: ev.e, k: k };
       }
       if (best) {
         if (d > 0) ctx.decalagesRelaches++;
-        return { cand: best.cand, e: best.e, cle: cle, pool: pool };
+        return { cand: best.cand, e: best.e, cle: cle, pool: pool, stock: best.e + extra(best.e) };
       }
     }
     var choix = base[0];
     base.forEach(function (b) { if (b.L > choix.L) choix = b; });
     ctx.contraintesRelachees++;
-    return { cand: choix, e: Math.min(choix.L, r), cle: cle, pool: pool };
+    var eForce = Math.min(choix.L, r);
+    return { cand: choix, e: eForce, cle: cle, pool: pool, stock: eForce + extra(eForce) };
   }
 
-  function remplirSegment(ctx, rang, a, b, prev, nouveaux, sortie, interdits) {
+  function complementBout(code) {
+    if (code === '45s') return '45r';
+    if (code === '45r') return '45s';
+    return 'droit';
+  }
+
+  function remplirSegment(ctx, rang, a, b, prev, nouveaux, sortie, interdits, extremites) {
     var o = ctx.o;
+    extremites = extremites || { uMin: a, uMax: b, bordDebut: null, bordFin: null, E: 0 };
     var c = a;
     var garde = 0;
     while (b - c > EPS && garde++ < 5000) {
       var r = b - c;
-      var ch = choisirPiece(ctx, rang, c, r, prev, interdits);
+      var auDebut = Math.abs(c - extremites.uMin) < EPS && Math.abs(a - extremites.uMin) < EPS;
+      var besoin = {
+        bout: auDebut ? (extremites.boutDebut || 'droit') : 'droit',
+        supDebut: auDebut ? (extremites.supDebut || 0) : 0,
+        supFin: (Math.abs(b - extremites.uMax) < EPS ? (extremites.supFin || 0) : 0),
+        E: extremites.E || 0
+      };
+      var ch = choisirPiece(ctx, rang, c, r, prev, interdits, besoin);
       var cand = ch.cand, e = ch.e;
+      var atteintFin = Math.abs(c + e - b) < EPS && Math.abs(b - extremites.uMax) < EPS;
+      var stock = e + (auDebut ? besoin.supDebut : 0) + (atteintFin ? besoin.supFin : 0);
       if (cand.origine === 'chute') {
         ch.pool.splice(cand.idx, 1);
       } else {
@@ -357,16 +440,95 @@
         if (cand.origine === 'manquante') ctx.manquantes[cand.typeId] = (ctx.manquantes[cand.typeId] || 0) + 1;
         else ctx.restant[cand.typeId]--;
       }
-      var reste = cand.L - e;
-      if (reste >= o.longueurMinPiece - EPS) ch.pool.push({ L: reste, typeId: cand.typeId });
+      var boutFin = atteintFin ? complementBout(extremites.boutFin || 'droit') : 'droit';
+      var baseReste = (cand.bout && cand.bout !== 'droit' && cand.bout !== besoin.bout) ? (cand.Lbrut - (extremites.E || 0)) : cand.Lbrut;
+      if (!(baseReste > 0)) baseReste = cand.L;
+      var reste = baseReste - stock;
+      if (reste >= o.longueurMinPiece - EPS) ch.pool.push({ L: reste, typeId: cand.typeId, bout: boutFin });
       if (b - (c + e) > EPS) nouveaux.push(c + e);
+      var vis = faceVisible(c, e, auDebut, atteintFin, extremites);
       sortie.push({
-        u0: c, u1: c + e, longueur: e, origine: cand.origine === 'chute' ? 'chute' : 'neuve',
-        manquante: cand.origine === 'manquante', typeId: cand.typeId, longueurLame: cand.L,
-        coupe: e < cand.L - EPS
+        u0: vis.u0, u1: vis.u1, longueur: vis.u1 - vis.u0,
+        pointeLongue: vis.longue, pointeCourte: vis.courte,
+        coupeDebut: auDebut ? (extremites.coupeDebut || 'droite') : 'droite',
+        coupeFin: atteintFin ? (extremites.coupeFin || 'droite') : 'droite',
+        origine: cand.origine === 'chute' ? 'chute' : 'neuve',
+        manquante: cand.origine === 'manquante', typeId: cand.typeId, longueurLame: cand.Lbrut || cand.L,
+        coupe: stock < (cand.Lbrut || cand.L) - EPS || vis.longue > vis.courte + EPS
       });
       c += e;
     }
+  }
+
+  function faceVisible(c, e, auDebut, atteintFin, ext) {
+    var u0 = c, u1 = c + e;
+    var E = ext.E || 0;
+    if (auDebut && ext.sensDebut === 'sortant' && ext.coupeDebut === '45') u0 -= E;
+    if (auDebut && ext.sensDebut === 'rentrant' && ext.coupeDebut === '45') u0 += E;
+    if (atteintFin && ext.sensFin === 'sortant' && ext.coupeFin === '45') u1 += E;
+    if (atteintFin && ext.sensFin === 'rentrant' && ext.coupeFin === '45') u1 -= E;
+    var dos = e;
+    var face = u1 - u0;
+    return { u0: u0, u1: u1, longue: Math.max(dos, face), courte: Math.min(dos, face) };
+  }
+
+  function bordsActifs(mur) {
+    if (!mur.bords) return false;
+    return ['gauche', 'droite', 'bas', 'haut'].some(function (k) {
+      return mur.bords[k] && mur.bords[k].type && mur.bords[k].type !== 'ras';
+    });
+  }
+
+  function retraitCoin90(bord, T, E) {
+    if (bord && bord.epaisseurRencontre > 0) return bord.epaisseurRencontre;
+    var tAutre = (bord && bord.epaisseurLambourdageAutre !== undefined && bord.epaisseurLambourdageAutre !== null)
+      ? bord.epaisseurLambourdageAutre
+      : (T || 0);
+    return tAutre + (E || 0);
+  }
+
+  function deltaDos(bord, T, E) {
+    if (!bord || bord.type === 'ras') return 0;
+    if (bord.type === 'joint') return -(bord.joint || 0);
+    var e = E || 0;
+    if (bord.sens !== 'sortant') {
+      if (bord.coupe === 'arrete') return -retraitCoin90(bord, T, e);
+      return 0;
+    }
+    if (bord.coupe === 'passe') return T + e;
+    if (bord.coupe === 'arrete') return -(bord.epaisseurRencontre || 0);
+    return T;
+  }
+
+  function supplementPointe(bord, E) {
+    if (!bord || bord.type !== 'angle' || bord.coupe !== '45' || bord.sens === 'rentrant') return 0;
+    return E || 0;
+  }
+
+  function codeBout(bord) {
+    if (!bord || bord.type !== 'angle' || bord.sens !== 'sortant' || bord.coupe !== '45') return 'droit';
+    return '45s';
+  }
+
+  function coupeDe(bord) {
+    return (bord && bord.type === 'angle' && bord.sens === 'sortant' && bord.coupe === '45') ? '45' : 'droite';
+  }
+
+  function libelleBord(bord) {
+    if (!bord || bord.type === 'ras') return 'à ras, coupe droite';
+    if (bord.type === 'joint') return 'joint de ' + texte(bord.joint) + ' mm, coupe droite';
+    var voisin = bord.voisin ? ' avec ' + bord.voisin : '';
+    if (bord.sens !== 'sortant') {
+      if (bord.coupe === 'arrete') {
+        return 'coin à 90°' + voisin + ', cette face s\'arrête contre celle qui va au fond, coupe droite'
+          + (bord.origineChoix === 'calcul' ? ', choisi pour utiliser le moins de lames' : '');
+      }
+      return 'coin à 90°' + voisin + ', cette face va au fond du coin, coupe droite'
+        + (bord.origineChoix === 'calcul' ? ', choisi pour utiliser le moins de lames' : '');
+    }
+    if (bord.coupe === '45' || !bord.coupe) return 'coin à 270°' + voisin + ', coupe à 45°';
+    if (bord.coupe === 'passe') return 'coin à 270°' + voisin + ', cette face passe, coupe droite';
+    return 'coin à 270°' + voisin + ', cette face s\'arrête, coupe droite';
   }
 
   function disposerMur(ctx, mur, orientation, cycle) {
@@ -374,6 +536,35 @@
     var U = horiz ? mur.largeur : mur.hauteur;
     var V = horiz ? mur.hauteur : mur.largeur;
     var o = ctx.o;
+    var actifs = bordsActifs(mur);
+    var T = mur.epaisseurSupport || 0;
+    function Ede(cle) {
+      var ep = ctx.norm.familles[cle].epaisseur;
+      return (ep === null || ep === undefined || !isFinite(ep)) ? 0 : ep;
+    }
+    function bordLong(debut) {
+      if (!actifs) return { type: 'ras' };
+      return horiz ? (debut ? mur.bords.gauche : mur.bords.droite) : (debut ? mur.bords.bas : mur.bords.haut);
+    }
+    function bordSpan(debut) {
+      if (!actifs) return { type: 'ras' };
+      return horiz ? (debut ? mur.bords.bas : mur.bords.haut) : (debut ? mur.bords.gauche : mur.bords.droite);
+    }
+    var Eref = 0;
+    ctx.norm.cles.forEach(function (k) { Eref = Math.max(Eref, Ede(k)); });
+    var vDebut, vFin, uMinRef, uMaxRef;
+    if (actifs) {
+      vDebut = -deltaDos(bordSpan(true), T, Eref);
+      vFin = V + deltaDos(bordSpan(false), T, Eref);
+      uMinRef = -deltaDos(bordLong(true), T, Eref);
+      uMaxRef = U + deltaDos(bordLong(false), T, Eref);
+      if (Eref === 0 && [bordLong(true), bordLong(false), bordSpan(true), bordSpan(false)].some(function (b) { return coupeDe(b) === '45'; })) {
+        ctx.avert.push('Mur ' + mur.id + ' : coupe à 45° sans épaisseur de lame. Pointe longue et pointe courte restent identiques tant que l\'épaisseur n\'est pas renseignée.');
+      }
+      if (coupeDe(bordSpan(true)) === '45' || coupeDe(bordSpan(false)) === '45') {
+        ctx.avert.push('Mur ' + mur.id + ' : un bord dans la hauteur des rangs est à 45°. Le premier ou le dernier rang est à biseauter sur toute sa longueur.');
+      }
+    }
     function versUV(ob) {
       return horiz
         ? { u0: ob.x, u1: ob.x + ob.largeur, v0: ob.y, v1: ob.y + ob.hauteur, libelle: ob.libelle }
@@ -381,8 +572,10 @@
     }
     var ouvertures = mur.obstacles.filter(function (ob) { return ob.type === 'ouverture'; }).map(versUV);
     var trous = mur.obstacles.filter(function (ob) { return ob.type === 'trou'; }).map(versUV);
-    var uMin = o.margeBord, uMax = U - o.margeBord;
-    var rangsPlan = planifierRangs(V, cycle, ctx.norm, ctx.avert, mur.id);
+    var uMin = actifs ? uMinRef : o.margeBord, uMax = actifs ? uMaxRef : U - o.margeBord;
+    var rangsPlan = actifs
+      ? planifierRangs(V, cycle, ctx.norm, ctx.avert, mur.id, vDebut, vFin)
+      : planifierRangs(V, cycle, ctx.norm, ctx.avert, mur.id);
     var prev = [];
     var pieces = [];
     var rangs = [];
@@ -397,7 +590,13 @@
         }).map(function (t) { return t.libelle; });
         pieces.push({
           rang: ri + 1, index: offset + pi + 1, x: x, y: y, w: w, h: h,
-          longueur: p.longueur, largeurRang: rang.largeur, famille: rang.source, refendu: rang.refendu,
+          longueur: p.longueur, pointeLongue: p.pointeLongue, pointeCourte: p.pointeCourte,
+          coupeDebut: p.coupeDebut || 'droite', coupeFin: p.coupeFin || 'droite',
+          coupeGauche: horiz ? (p.coupeDebut || 'droite') : 'droite',
+          coupeDroite: horiz ? (p.coupeFin || 'droite') : 'droite',
+          coupeBas: horiz ? 'droite' : (p.coupeDebut || 'droite'),
+          coupeHaut: horiz ? 'droite' : (p.coupeFin || 'droite'),
+          largeurRang: rang.largeur, famille: rang.source, refendu: rang.refendu,
           raccord: !!rang.raccord, percements: perces,
           origine: p.origine, manquante: p.manquante, typeId: p.typeId, longueurLame: p.longueurLame, coupe: p.coupe
         });
@@ -409,8 +608,18 @@
       var brutes = [];
       var interdits = trous.filter(function (t) { return t.v0 < rang.v1 - EPS && t.v1 > rang.v0 + EPS; })
         .map(function (t) { return [t.u0, t.u1]; });
-      segmentsLibres(rang, ouvertures, uMin, uMax).forEach(function (s) {
-        remplirSegment(ctx, rang, s[0], s[1], prev, nouveaux, brutes, interdits);
+      var E = Ede(rang.source);
+      var u0 = actifs ? -deltaDos(bordLong(true), T, E) : uMin;
+      var u1 = actifs ? U + deltaDos(bordLong(false), T, E) : uMax;
+      var ext = {
+        uMin: u0, uMax: u1, E: E,
+        boutDebut: codeBout(bordLong(true)), boutFin: codeBout(bordLong(false)),
+        supDebut: supplementPointe(bordLong(true), E), supFin: supplementPointe(bordLong(false), E),
+        coupeDebut: coupeDe(bordLong(true)), coupeFin: coupeDe(bordLong(false)),
+        sensDebut: bordLong(true).sens || null, sensFin: bordLong(false).sens || null
+      };
+      segmentsLibres(rang, ouvertures, u0, u1).forEach(function (s) {
+        remplirSegment(ctx, rang, s[0], s[1], prev, nouveaux, brutes, interdits, ext);
       });
       enregistrer(ri, rang, brutes, 0);
       var nbRaccords = 0;
@@ -445,6 +654,11 @@
     var couvert = pieces.reduce(function (s, p) { return s + p.w * p.h; }, 0);
     return {
       id: mur.id, largeur: mur.largeur, hauteur: mur.hauteur, orientation: orientation, obstacles: mur.obstacles,
+      epaisseurSupport: T,
+      bords: actifs ? {
+        gauche: libelleBord(mur.bords.gauche), droite: libelleBord(mur.bords.droite),
+        bas: libelleBord(mur.bords.bas), haut: libelleBord(mur.bords.haut)
+      } : null,
       rangs: rangs, pieces: pieces,
       stats: {
         surfaceMur: m2(surfaceMur), surfaceObstacles: m2(surfaceOuvertures), surfaceARevetir: m2(surfaceMur - surfaceOuvertures),
@@ -491,7 +705,7 @@
       var largeur = Number(cle.split('@')[1]);
       var fam = cle.split('@')[0];
       ctx.pool[cle].forEach(function (it) {
-        restantes.push({ famille: fam, largeurRang: largeur, longueur: arrondi(it.L) });
+        restantes.push({ famille: fam, largeurRang: largeur, longueur: arrondi(it.L), bout: it.bout || 'droit' });
         surfaceRestantes += m2(it.L * largeur);
       });
     });
@@ -529,36 +743,233 @@
     return out;
   }
 
+  function copierMurs(murs) {
+    return murs.map(function (m) {
+      var bords = null;
+      if (m.bords) {
+        bords = {};
+        ['gauche', 'droite', 'bas', 'haut'].forEach(function (n) { bords[n] = Object.assign({}, m.bords[n]); });
+      }
+      return Object.assign({}, m, { bords: bords });
+    });
+  }
+
+  function bords90(mur) {
+    var out = [];
+    if (!mur || !mur.bords) return out;
+    ['gauche', 'droite', 'bas', 'haut'].forEach(function (n) {
+      var b = mur.bords[n];
+      if (b && b.type === 'angle' && b.sens !== 'sortant') out.push(n);
+    });
+    return out;
+  }
+
+  function completerCoinsFixes(murs) {
+    var copie = copierMurs(murs);
+    var parId = {};
+    copie.forEach(function (m) { parId[m.id] = m; });
+    var avert = [];
+    copie.forEach(function (m) {
+      bords90(m).forEach(function (nom) {
+        var b = m.bords[nom];
+        if (b.coupe !== 'passe' && b.coupe !== 'arrete') return;
+        var autre = b.voisin && parId[b.voisin];
+        if (!autre) return;
+        var candidats = bords90(autre).filter(function (n2) {
+          var v = autre.bords[n2].voisin;
+          return !v || v === m.id;
+        });
+        var nom2 = null;
+        candidats.forEach(function (n2) { if (autre.bords[n2].voisin === m.id) nom2 = n2; });
+        if (!nom2 && candidats.length === 1) nom2 = candidats[0];
+        if (!nom2) return;
+        var b2 = autre.bords[nom2];
+        var voulu = b.coupe === 'passe' ? 'arrete' : 'passe';
+        if (b2.coupe === 'auto') {
+          b2.coupe = voulu;
+          b2.origineChoix = 'calcul';
+          if (voulu === 'arrete') b2.epaisseurLambourdageAutre = m.epaisseurSupport || 0;
+          if (b.coupe === 'arrete' && !(b.epaisseurLambourdageAutre >= 0 && b.origineChoix === 'calcul')) {
+            b.epaisseurLambourdageAutre = autre.epaisseurSupport || 0;
+          }
+        } else if (b2.coupe === b.coupe) {
+          avert.push('Coin à 90° entre ' + m.id + ' et ' + autre.id + ' : les deux faces sont réglées pareil. Une seule doit aller au fond.');
+        } else if (b.coupe === 'arrete') {
+          b.epaisseurLambourdageAutre = autre.epaisseurSupport || 0;
+        }
+      });
+    });
+    return { murs: copie, avert: avert };
+  }
+
+  function estCoin90Auto(bord) {
+    return bord && bord.type === 'angle' && bord.sens !== 'sortant' && bord.coupe === 'auto';
+  }
+
+  function listerCoins(murs) {
+    var parId = {};
+    murs.forEach(function (m) { parId[m.id] = m; });
+    var pris = {};
+    var decisions = [];
+    murs.forEach(function (m) {
+      if (!m.bords) return;
+      ['gauche', 'droite', 'bas', 'haut'].forEach(function (nom) {
+        var cle = m.id + '/' + nom;
+        if (pris[cle] || !estCoin90Auto(m.bords[nom])) return;
+        var voisinId = m.bords[nom].voisin;
+        var autre = voisinId && parId[voisinId];
+        var nom2 = null;
+        if (autre && autre.bords) {
+          var candidats = [];
+          ['gauche', 'droite', 'bas', 'haut'].forEach(function (n2) {
+            var b2 = autre.bords[n2];
+            if (!estCoin90Auto(b2) || pris[autre.id + '/' + n2]) return;
+            if (b2.voisin && b2.voisin !== m.id) return;
+            candidats.push(n2);
+          });
+          candidats.forEach(function (n2) {
+            if (autre.bords[n2].voisin === m.id) nom2 = n2;
+          });
+          if (!nom2 && candidats.length) nom2 = candidats[0];
+        }
+        if (nom2) {
+          pris[cle] = pris[autre.id + '/' + nom2] = true;
+          decisions.push({ type: 'paire', a: m.id, ea: nom, b: autre.id, eb: nom2 });
+        } else {
+          pris[cle] = true;
+          decisions.push({ type: 'seule', mur: m.id, bord: nom, voisin: voisinId || '' });
+        }
+      });
+    });
+    return decisions;
+  }
+
+  function appliquerCoins(murs, decisions, bits) {
+    var copie = copierMurs(murs);
+    var parId = {};
+    copie.forEach(function (m) { parId[m.id] = m; });
+    var choix = [];
+    var fondLongueur = 0;
+    decisions.forEach(function (d, i) {
+      var premierAuFond = !bits[i];
+      if (d.type === 'paire') {
+        var fond = parId[premierAuFond ? d.a : d.b];
+        var court = parId[premierAuFond ? d.b : d.a];
+        var bordFond = premierAuFond ? d.ea : d.eb;
+        var bordCourt = premierAuFond ? d.eb : d.ea;
+        fond.bords[bordFond].coupe = 'passe';
+        fond.bords[bordFond].origineChoix = 'calcul';
+        court.bords[bordCourt].coupe = 'arrete';
+        court.bords[bordCourt].origineChoix = 'calcul';
+        court.bords[bordCourt].epaisseurLambourdageAutre = fond.epaisseurSupport || 0;
+        fondLongueur += fond.largeur;
+        choix.push({ auFond: fond.id, plusCourte: court.id, bordFond: bordFond, bordCourt: bordCourt, seule: false });
+      } else {
+        var mur = parId[d.mur];
+        mur.bords[d.bord].coupe = premierAuFond ? 'passe' : 'arrete';
+        mur.bords[d.bord].origineChoix = 'calcul';
+        if (premierAuFond) fondLongueur += mur.largeur;
+        choix.push({
+          auFond: premierAuFond ? mur.id : (d.voisin || ''),
+          plusCourte: premierAuFond ? (d.voisin || '') : mur.id,
+          seule: true, mur: mur.id, bord: d.bord, murAuFond: premierAuFond, voisinConnu: !!d.voisin
+        });
+      }
+    });
+    return { murs: copie, choix: choix, fondLongueur: fondLongueur };
+  }
+
+  function phraseCoins(choix, pourquoi) {
+    if (!choix.length) return [];
+    var lignes = [];
+    choix.forEach(function (c) {
+      if (c.seule) {
+        lignes.push('Mur ' + c.mur + ', bord ' + c.bord + ' : '
+          + (c.murAuFond ? 'cette face va au fond du coin.' : 'cette face s\'arrête contre l\'autre.')
+          + (c.voisinConnu ? '' : ' Le mur voisin n\'est pas dans le calcul.')
+          + ' ' + pourquoi);
+      } else {
+        lignes.push('Coin à 90° entre ' + c.auFond + ' et ' + c.plusCourte + ' : '
+          + c.auFond + ' va au fond, ' + c.plusCourte + ' s\'arrête contre elle et perd l\'épaisseur de la lame plus celle du lambourdage. '
+          + pourquoi);
+      }
+    });
+    return lignes;
+  }
+
   function calculerFixe(norm, orientation, motif) {
     var cycle = cycleDepuisMotif(norm, motif);
     var orders = [norm.murs.map(function (m) { return m.id; })];
     if (norm.o.ordreMurs === 'auto' && norm.murs.length > 1 && norm.murs.length <= 5) {
       orders = permutations(orders[0]);
     }
+    var prepare = completerCoinsFixes(norm.murs);
+    var decisions = listerCoins(prepare.murs);
+    var k = decisions.length;
+    var nAssign = k === 0 ? 1 : (1 << Math.min(k, 8));
+    var reduit = nAssign * orders.length > 400;
+    var ordresUtiles = reduit ? [orders[0]] : orders;
     var meilleur = null;
-    orders.forEach(function (ordre) {
-      var avert = norm.avert.slice();
+    var parBits = {};
+    function essayer(bits, ordre) {
+      var applique = appliquerCoins(prepare.murs, decisions, bits);
+      var avert = norm.avert.concat(prepare.avert);
       var ctx = nouveauContexte(norm, avert);
       var parId = {};
-      norm.murs.forEach(function (m) { parId[m.id] = m; });
+      applique.murs.forEach(function (m) { parId[m.id] = m; });
       var resultats = {};
       ordre.forEach(function (id) {
-        var m = parId[id];
-        resultats[id] = disposerMur(ctx, m, m.orientation || orientation, cycle);
+        resultats[id] = disposerMur(ctx, parId[id], parId[id].orientation || orientation, cycle);
       });
       var murs = norm.murs.map(function (m) { return resultats[m.id]; });
       var syn = synthese(norm, ctx, murs, avert);
       var cle = [syn.total.lamesManquantes, syn.total.surfaceAchetee, syn.total.joints];
-      if (!meilleur || comparerCles(cle, meilleur.cle) < 0) {
-        meilleur = { cle: cle, ordre: ordre, murs: murs, syn: syn, avert: avert };
+      var idBits = bits.join('');
+      if (!parBits[idBits] || comparerCles(cle, parBits[idBits]) < 0) parBits[idBits] = cle.slice();
+      var candidat = { cle: cle, ordre: ordre, murs: murs, syn: syn, avert: avert, choix: applique.choix, fondLongueur: applique.fondLongueur };
+      if (!meilleur) {
+        meilleur = candidat;
+        return;
       }
+      var cmp = comparerCles(cle, meilleur.cle);
+      if (cmp < 0 || (cmp === 0 && candidat.fondLongueur > meilleur.fondLongueur)) meilleur = candidat;
+    }
+    if (k > 8) {
+      var bits = [];
+      for (var z = 0; z < k; z++) bits.push(0);
+      ordresUtiles.forEach(function (ordre) { essayer(bits.slice(), ordre); });
+      for (var i = 0; i < k; i++) {
+        var garde = meilleur;
+        bits[i] = 1;
+        ordresUtiles.forEach(function (ordre) { essayer(bits.slice(), ordre); });
+        if (meilleur === garde) bits[i] = 0;
+      }
+    } else {
+      for (var a = 0; a < nAssign; a++) {
+        var bitsA = [];
+        for (var j = 0; j < k; j++) bitsA.push((a >> j) & 1);
+        ordresUtiles.forEach(function (ordre) { essayer(bitsA, ordre); });
+      }
+    }
+    var clesBits = Object.keys(parBits).map(function (id) { return parBits[id]; });
+    var consoDifferente = clesBits.some(function (c) {
+      return c[0] !== clesBits[0][0] || Math.abs(c[1] - clesBits[0][1]) > 1e-6;
+    });
+    var jointsDifferents = clesBits.some(function (c) { return c[2] !== clesBits[0][2]; });
+    var pourquoi = consoDifferente
+      ? 'Ce sens est celui qui ouvre le moins de lames.'
+      : (jointsDifferents
+        ? 'Les deux sens ouvrent le même nombre de lames. Celui-ci demande moins de coupes.'
+        : 'Les deux sens ouvrent le même nombre de lames. La face la plus longue va au fond. À longueur égale, c\'est la première de la liste.');
+    phraseCoins(meilleur.choix, pourquoi).forEach(function (ligne) {
+      if (meilleur.avert.indexOf(ligne) < 0) meilleur.avert.push(ligne);
     });
     function refLisible(cle) {
       var w = norm.familles[cle].largeurUtile;
       var memes = norm.cles.filter(function (k) { return Math.abs(norm.familles[k].largeurUtile - w) < EPS; });
       return memes.length === 1 ? w : cle;
     }
-    var optionsRetenues = { orientation: orientation, motif: motif.motif };
+    var optionsRetenues = { orientation: orientation, motif: motif.motif, prioriteCoupe: norm.o.prioriteCoupe };
     if (motif.motif === 'uniforme') optionsRetenues.famille = refLisible(cycle[0]);
     if (motif.motif === 'sequence') optionsRetenues.sequence = cycle.map(refLisible);
     if (motif.motif === 'aleatoire') optionsRetenues.graine = Number(motif.graine) || 1;
@@ -608,9 +1019,11 @@
     var liste = [];
     candidats(norm).forEach(function (c) {
       var res = calculerFixe(norm, c.orientation, c.motif);
-      var signature = JSON.stringify([c.orientation, res.murs.map(function (m) {
-        return m.pieces.map(function (p) { return [p.x, p.y, arrondi(p.w), arrondi(p.h)]; });
-      })]);
+      var signature = JSON.stringify(res.murs.map(function (m) {
+        return [m.id, m.orientation, m.pieces.map(function (p) {
+          return [p.rang, p.typeId, arrondi(p.x), arrondi(p.y), arrondi(p.w), arrondi(p.h)];
+        })];
+      }));
       if (vus[signature]) return;
       vus[signature] = true;
       liste.push({ score: score(res), resultat: res });
@@ -654,9 +1067,21 @@
     if (res.murs.length > 1) L.push('Ordre de pose retenu pour réutiliser les chutes : ' + p.ordreMurs.join(', ') + '.');
     res.murs.forEach(function (m) {
       L.push('');
-      L.push('Mur ' + m.id + ' (' + texte(m.largeur) + ' x ' + texte(m.hauteur) + ' mm, ' + m.orientation + ') : '
+      L.push('Mur ' + m.id + ' (support ' + texte(m.largeur) + ' x ' + texte(m.hauteur) + ' mm, ' + m.orientation + ') : '
         + m.stats.rangs + ' rangs, ' + m.stats.pieces + ' pièces, ' + m.stats.joints + ' joints, '
         + texte(Math.round(m.stats.surfaceARevetir * 100) / 100) + ' m2 à revêtir.');
+      if (m.bords) {
+        if (m.epaisseurSupport) L.push('Support derrière les lames : ' + texte(m.epaisseurSupport) + ' mm.');
+        L.push('Bords : gauche, ' + m.bords.gauche + '. Droite, ' + m.bords.droite + '. Bas, ' + m.bords.bas + '. Haut, ' + m.bords.haut + '.');
+      }
+      var biseaux = m.pieces.filter(function (p) {
+        return p.pointeLongue && p.pointeCourte && Math.abs(p.pointeLongue - p.pointeCourte) > 0.5;
+      });
+      if (biseaux.length) {
+        L.push('Pièces à 45° (pointe longue / pointe courte, mm) : ' + biseaux.map(function (p) {
+          return 'rang ' + p.rang + ' n°' + p.index + ' ' + texte(arrondi(p.pointeLongue)) + '/' + texte(arrondi(p.pointeCourte));
+        }).join(' ; ') + '.');
+      }
     });
     L.push('');
     L.push('Lames à prévoir :');
