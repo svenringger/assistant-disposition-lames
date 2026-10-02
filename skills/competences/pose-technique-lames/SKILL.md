@@ -41,7 +41,7 @@ Les chiffres ci-dessous sont des ordres de grandeur courants, à confirmer.
 
 1. **Acclimater les lames** dans la pièce, à plat, dans leur emballage entrouvert, avant la pose (durée à prendre dans la notice; repère courant: au moins 48 heures).
 2. **Tracer** les repères: niveau de départ, verticales, position des liteaux, ouvertures.
-3. **Choisir le point de départ** avec le monteur: en bas pour un sens horizontal, d'un angle ou centré sur un repère pour un sens vertical. Ce choix change la coupe du dernier rang: il se décide avec la disposition. Seule cette dernière lame peut être recoupée en largeur. Les autres gardent leur languette.
+3. **Choisir le point de départ** avec le monteur: en bas pour un sens horizontal, d'un angle ou centré sur un repère pour un sens vertical. Ce choix change la coupe du dernier rang: il se décide avec la disposition. Seule cette dernière lame peut être recoupée en largeur. Les autres gardent leur languette. Une plaque sans languette, si la notice l'autorise, peut être recoupée dans les deux sens : le calcul le fait quand le réglage est activé.
 4. **Poser rang après rang**, en contrôlant niveau et aplomb tous les quelques rangs.
 5. **Respecter le décalage des joints** figuré dans la disposition.
 6. **Fixer** selon la notice: clouage ou agrafage dans la languette, clips, ou vis visibles à traiter. Pré-percer les bois durs ou thermo-traités.

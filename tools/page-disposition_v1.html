@@ -308,6 +308,15 @@
       etat.murs.push({ id: 'mur-' + (etat.murs.length + 1), largeur: 3000, hauteur: 2500, obstacles: [] }); dessinerMurs(); planifier(); } })));
   }
 
+  function selectBooleen(cle, etiquettes) {
+    var s = h('select', {});
+    s.appendChild(h('option', { value: 'false', texte: etiquettes[0] }));
+    s.appendChild(h('option', { value: 'true', texte: etiquettes[1] }));
+    s.value = etat.options[cle] ? 'true' : 'false';
+    s.addEventListener('change', function () { etat.options[cle] = s.value === 'true'; planifier(); });
+    return s;
+  }
+
   function selectOptions(cle, valeurs, apres) {
     var s = h('select', {});
     valeurs.forEach(function (v) { s.appendChild(h('option', { value: v[0], texte: v[1] })); });
@@ -340,6 +349,8 @@
       extra.appendChild(h('label', { texte: 'Largeurs utiles dans l\'ordre, répétées jusqu\'en haut du mur' })); extra.appendChild(seq);
     }
     if (o.motif === 'aleatoire') { extra.appendChild(h('label', { texte: 'Graine (change le tirage)' })); extra.appendChild(champ(o, 'graine')); }
+    zone.appendChild(h('label', { texte: 'Plaque sans languette' }));
+    zone.appendChild(selectBooleen('sansLanguette', ['Non, la languette reste intacte', 'Oui, une chute haute peut être recoupée']));
     zone.appendChild(h('label', { texte: 'Coupe des lames longues' }));
     zone.appendChild(selectOptions('prioriteCoupe', [['chute', 'Économiser les chutes'], ['longueur', 'Couvrir le rang en entier']]));
     zone.appendChild(h('label', { texte: 'Sens de pose' }));

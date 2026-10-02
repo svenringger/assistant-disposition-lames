@@ -58,7 +58,9 @@ Plusieurs murs dans un même fichier forment un **lot**: les chutes d'un mur ser
 
 ## Réglages
 
-`--orientation`, `--motif`, `--famille`, `--sequence 90,140`, `--graine`, `--decalage-min`, `--longueur-min-piece`, `--largeur-min-bord`, `--jeu`, `--marge-bord`, `--marge-commande`, `--taille-trou-max`, `--ordre-murs`. Ils remplacent les options du fichier.
+`--orientation`, `--motif`, `--famille`, `--sequence 90,140`, `--graine`, `--decalage-min`, `--longueur-min-piece`, `--largeur-min-bord`, `--jeu`, `--marge-bord`, `--marge-commande`, `--taille-trou-max`, `--ordre-murs`, `--sans-languette true|false`. Ils remplacent les options du fichier.
+
+`sansLanguette` est faux par défaut. On ne l'active que pour une plaque que la notice autorise à recouper dans les deux sens. L'outil peut alors recouper une chute plus haute que le rang. Une lame à languette garde le défaut : une chute reste à la hauteur de son rang.
 
 Ce sont des réglages modifiables, pas des règles. Le sens de chaque réglage et ses valeurs de départ sont expliqués dans la compétence `repartition-decoupe-lames`.
 

@@ -16,6 +16,8 @@
  *             obstacles[] : { x, y, largeur, hauteur, libelle? }
  *             origine des coordonnées : coin bas gauche du support, y vers le haut
  *   options : voir DEFAUTS (réglages modifiables, jamais des règles de l'art)
+ *             sansLanguette (défaut faux) : une chute plus haute que le rang peut être
+ *             recoupée à la hauteur de ce rang. Faux pour une lame à languette.
  *
  * Principe : un mur est couvert par des rangs (largeurs de lames empilées). Chaque rang est rempli
  * par des pièces bout à bout. Les joints de deux rangs voisins restent éloignés d'au moins
@@ -48,7 +50,8 @@
     pasCoupe: 5,
     tailleTrouMax: 250,
     ordreMurs: 'auto',
-    prioriteCoupe: 'chute'
+    prioriteCoupe: 'chute',
+    sansLanguette: false
   };
 
   var OPTIONS_NUMERIQUES = ['jeuEntreLames', 'decalageMin', 'longueurMinPiece', 'largeurMinBord',
@@ -84,6 +87,7 @@
     });
     if (!(o.pasCoupe > 0)) erreurs.push('Option pasCoupe invalide.');
     if (o.prioriteCoupe !== 'chute' && o.prioriteCoupe !== 'longueur') erreurs.push('Option prioriteCoupe invalide.');
+    if (o.sansLanguette !== true && o.sansLanguette !== false) erreurs.push('Option sansLanguette invalide.');
 
     var familles = {};
     var cles = [];
@@ -298,10 +302,14 @@
         if (assezLarge) {
           rangs.pop();
           poserDernier(last.v0, combine);
-          avert.push('Mur ' + idMur + ' : il reste ' + texte(reste) + ' mm, trop peu pour un rang. Seule la dernière lame est recoupée en largeur, à ' + texte(combine) + ' mm. La lame d\'avant garde sa largeur, et donc sa languette.');
+          avert.push(o.sansLanguette
+            ? 'Mur ' + idMur + ' : il reste ' + texte(reste) + ' mm, trop peu pour un rang. Le dernier rang est élargi à ' + texte(combine) + ' mm.'
+            : 'Mur ' + idMur + ' : il reste ' + texte(reste) + ' mm, trop peu pour un rang. Seule la dernière lame est recoupée en largeur, à ' + texte(combine) + ' mm. La lame d\'avant garde sa largeur, et donc sa languette.');
         } else {
           poserDernier(debut, reste);
-          avert.push('Mur ' + idMur + ' : il reste ' + texte(reste) + ' mm. Ce dernier rang est plus étroit que ' + texte(o.largeurMinBord) + ' mm. On ne recoupe pas la lame d\'avant : elle perdrait sa languette.');
+          avert.push(o.sansLanguette
+            ? 'Mur ' + idMur + ' : il reste ' + texte(reste) + ' mm. Ce dernier rang est plus étroit que ' + texte(o.largeurMinBord) + ' mm.'
+            : 'Mur ' + idMur + ' : il reste ' + texte(reste) + ' mm. Ce dernier rang est plus étroit que ' + texte(o.largeurMinBord) + ' mm. On ne recoupe pas la lame d\'avant : elle perdrait sa languette.');
         }
       }
     }
@@ -370,19 +378,44 @@
     return L2 > EPS ? L2 : 0;
   }
 
+  function clePool(source, hauteur) {
+    return source + '@' + arrondi(hauteur);
+  }
+
+  function poolsPourRang(ctx, rang) {
+    var cle = clePool(rang.source, rang.largeur);
+    var pools = [{ cle: cle, pool: ctx.pool[cle] || (ctx.pool[cle] = []), hauteur: rang.largeur }];
+    if (!ctx.o.sansLanguette) return pools;
+    Object.keys(ctx.pool).forEach(function (k) {
+      var parts = k.split('@');
+      if (parts[0] !== String(rang.source)) return;
+      var h = Number(parts[1]);
+      if (h > rang.largeur + EPS) pools.push({ cle: k, pool: ctx.pool[k], hauteur: h });
+    });
+    return pools;
+  }
+
   function choisirPiece(ctx, rang, c, r, prev, interdits, besoin) {
     var o = ctx.o;
     besoin = besoin || { bout: 'droit', supDebut: 0, supFin: 0, E: 0 };
     var fam = ctx.familles[rang.source];
-    var cle = rang.source + '@' + arrondi(rang.largeur);
-    var pool = ctx.pool[cle] || (ctx.pool[cle] = []);
+    var pools = poolsPourRang(ctx, rang);
+    var poolExact = pools[0].pool;
     var base = [];
-    pool.forEach(function (it, idx) {
-      var Lu = longueurUtilisable(it.L, it.bout || 'droit', besoin.bout, besoin.E);
-      if (Lu > EPS) base.push({ origine: 'chute', L: Lu, Lbrut: it.L, idx: idx, typeId: it.typeId, bout: it.bout || 'droit' });
+    pools.forEach(function (p) {
+      p.pool.forEach(function (it, idx) {
+        var Lu = longueurUtilisable(it.L, it.bout || 'droit', besoin.bout, besoin.E);
+        if (Lu > EPS) base.push({
+          origine: 'chute', L: Lu, Lbrut: it.L, idx: idx, typeId: it.typeId, bout: it.bout || 'droit',
+          pool: p.pool, hauteur: p.hauteur
+        });
+      });
     });
     fam.types.forEach(function (t) {
-      base.push({ origine: ctx.restant[t.id] > 0 ? 'neuve' : 'manquante', L: t.longueur, Lbrut: t.longueur, type: t, typeId: t.id, bout: 'droit' });
+      base.push({
+        origine: ctx.restant[t.id] > 0 ? 'neuve' : 'manquante', L: t.longueur, Lbrut: t.longueur,
+        type: t, typeId: t.id, bout: 'droit', pool: poolExact, hauteur: rang.largeur
+      });
     });
     function extra(e) { return besoin.supDebut + (e >= r - EPS ? besoin.supFin : 0); }
     var decs = [o.decalageMin, o.decalageMin / 2, 0];
@@ -392,21 +425,22 @@
         var ev = evaluer(base[i].L, c, r, prev, decs[d], o, d < 2 ? interdits : [], extra);
         if (!ev) continue;
         var cout = ev.cout + (base[i].origine === 'manquante' ? 1e6 : 0);
+        var rip = base[i].hauteur > rang.largeur + EPS ? 1 : 0;
         var k = o.prioriteCoupe === 'longueur'
-          ? [base[i].origine === 'manquante' ? 1 : 0, -ev.e, ev.cout, base[i].origine === 'chute' ? 0 : 1]
-          : [cout, base[i].origine === 'chute' ? 0 : 1, -ev.e];
+          ? [base[i].origine === 'manquante' ? 1 : 0, -ev.e, ev.cout, rip, base[i].origine === 'chute' ? 0 : 1]
+          : [cout, base[i].origine === 'chute' ? 0 : 1, rip, -ev.e];
         if (!best || comparerCles(k, best.k) < 0) best = { cand: base[i], e: ev.e, k: k };
       }
       if (best) {
         if (d > 0) ctx.decalagesRelaches++;
-        return { cand: best.cand, e: best.e, cle: cle, pool: pool, stock: best.e + extra(best.e) };
+        return { cand: best.cand, e: best.e, cle: clePool(rang.source, best.cand.hauteur), pool: best.cand.pool, stock: best.e + extra(best.e) };
       }
     }
     var choix = base[0];
     base.forEach(function (b) { if (b.L > choix.L) choix = b; });
     ctx.contraintesRelachees++;
     var eForce = Math.min(choix.L, r);
-    return { cand: choix, e: eForce, cle: cle, pool: pool, stock: eForce + extra(eForce) };
+    return { cand: choix, e: eForce, cle: clePool(rang.source, choix.hauteur), pool: choix.pool, stock: eForce + extra(eForce) };
   }
 
   function complementBout(code) {
@@ -445,6 +479,12 @@
       if (!(baseReste > 0)) baseReste = cand.L;
       var reste = baseReste - stock;
       if (reste >= o.longueurMinPiece - EPS) ch.pool.push({ L: reste, typeId: cand.typeId, bout: boutFin });
+      var bande = (cand.hauteur || rang.largeur) - rang.largeur;
+      if (o.sansLanguette && bande > EPS && stock >= o.longueurMinPiece - EPS) {
+        var cleBande = clePool(rang.source, bande);
+        var poolBande = ctx.pool[cleBande] || (ctx.pool[cleBande] = []);
+        poolBande.push({ L: stock, typeId: cand.typeId, bout: 'droit' });
+      }
       if (b - (c + e) > EPS) nouveaux.push(c + e);
       var vis = faceVisible(c, e, auDebut, atteintFin, extremites);
       sortie.push({
@@ -454,7 +494,7 @@
         coupeFin: atteintFin ? (extremites.coupeFin || 'droite') : 'droite',
         origine: cand.origine === 'chute' ? 'chute' : 'neuve',
         manquante: cand.origine === 'manquante', typeId: cand.typeId, longueurLame: cand.Lbrut || cand.L,
-        coupe: stock < (cand.Lbrut || cand.L) - EPS || vis.longue > vis.courte + EPS
+        coupe: stock < (cand.Lbrut || cand.L) - EPS || vis.longue > vis.courte + EPS || (cand.hauteur || rang.largeur) > rang.largeur + EPS
       });
       c += e;
     }

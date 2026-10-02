@@ -160,4 +160,4 @@ Le process est terminé quand:
 - Présenter le dessin comme une photo du rendu final
 - Passer `--variante` pour produire ou régénérer la page d'une disposition déjà écrite dans le fichier
 - Présenter la première carte comparée comme la disposition retenue
-- Recouper en largeur une lame qui n'est pas la dernière du mur : elle perdrait sa languette
+- Recouper en largeur une lame à languette qui n'est pas la dernière du mur : elle perdrait sa languette. Une plaque sans languette se calcule avec le réglage prévu, pas à la main

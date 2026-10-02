@@ -59,7 +59,15 @@ Repères pour répartir des lames de largeurs et de longueurs différentes sur u
 - **Un coin à 270° est coupé à 45°.** L'écart entre pointe longue et pointe courte est l'épaisseur de la lame. Le lambourdage ajoute sa propre épaisseur au dépassement. Si l'épaisseur de lame manque, l'outil le signale et ne chiffre pas le biseau.
 - **Une chute déjà coupée à 45° n'est pas une chute droite.** On la réutilise telle quelle seulement si le bout suivant accepte le même biseau. Sinon on la remet d'équerre, elle perd l'épaisseur de la lame, ou on la laisse de côté.
 - **Les joints de bout sont le vrai sujet.** Moins il y en a, plus le mur est calme. Ils doivent être décalés entre rangs voisins pour que le mur ne montre pas de ligne verticale ou diagonale involontaire.
-- **Seule la dernière lame du mur peut être recoupée en largeur.** Les autres gardent leur largeur d'usine : une recoupe enlève la languette, et la lame ne s'assemble plus à la suivante. Si le reste est trop étroit pour un rang, l'outil élargit seulement cette dernière lame. Il ne recoupe jamais la lame d'avant pour partager le reste.
+- **Seule la dernière lame du mur peut être recoupée en largeur.** Les autres gardent leur largeur d'usine : une recoupe enlève la languette, et la lame ne s'assemble plus à la suivante. Si le reste est trop étroit pour un rang, l'outil élargit seulement cette dernière lame. Il ne recoupe jamais la lame d'avant pour partager le reste. Cette règle vaut pour les lames à languette. Elle ne vaut pas pour une plaque sans languette.
+
+## Plaques recoupables sans languette
+
+Une plaque que la notice autorise à recouper dans les deux sens ne suit pas la règle de la languette. Active le réglage `sansLanguette` dans le fichier de calcul. L'outil recoupe alors une chute encore trop haute pour un rang plus court, et il garde le décalage des joints déjà saisi. Le nombre annoncé est celui de l'outil avec ce réglage.
+
+Sans ce réglage, l'outil range les chutes par hauteur de rang. Une chute de 625 mm de haut ne sert pas un rang plus court, et le compte peut afficher une plaque de trop. On ne corrige pas ce compte à la main : on active le réglage et on relance le calcul.
+
+La longueur minimale de 400 mm est un réglage des lames de bois. Si la notice de la plaque ne l'impose pas, baisse ce réglage plutôt que de laisser l'outil jeter une chute juste en dessous. Une chute ne passe d'une maison à l'autre que si le calcul du lot entier baisse le total.
 - **Les ouvertures imposent leurs coupes.** Autour d'une fenêtre, on préfère aligner un joint de rang sur le bord de l'ouverture plutôt que de terminer sur une pièce minuscule.
 - **Les chutes se réutilisent.** Une chute assez longue alimente un rang suivant, même sur un autre mur du lot. C'est ce qui réduit la commande.
 - **Deux modes de calcul.** *Stock*: les quantités sont limitées, l'outil signale ce qui manque. *Achat*: pas de limite, l'outil ajoute une marge de commande et arrondit aux paquets.
@@ -76,6 +84,7 @@ Repères pour répartir des lames de largeurs et de longueurs différentes sur u
 | Jeu entre lames | 0 mm | À régler si la notice du fabricant demande un jeu de dilatation ou un joint creux |
 | Marge de bord | 0 mm | Réserve identique sur les quatre côtés, seulement si aucun bord n'est un joint ou un angle. Dès qu'un bord est précisé, c'est lui qui compte |
 | Marge de commande | 10 % | Ajoutée à l'achat pour les casses, défauts et recoupes |
+| Plaque sans languette | non | Oui seulement si la notice autorise de recouper la plaque dans les deux sens. Une chute plus haute peut alors alimenter un rang plus court |
 | Taille maximale d'un trou | 250 mm | Au-delà, l'outil traite le passage comme une ouverture |
 | Ordre des murs | automatique | L'outil teste l'ordre de pose qui gaspille le moins |
 
@@ -97,6 +106,7 @@ Cherche la cause avant de changer les lames: souvent un changement de sens, une 
 
 ## Ce que tu ne fais jamais
 
+- Annoncer un nombre de plaques sans languette en laissant le réglage éteint
 - Calculer à la main une quantité, une chute ou une longueur de coupe
 - Cacher un avertissement de l'outil
 - Considérer une valeur de départ comme une règle de l'art

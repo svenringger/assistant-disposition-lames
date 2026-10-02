@@ -21,6 +21,7 @@
  *   --famille <clé ou largeur>               --sequence 90,140,90       --graine 2
  *   --decalage-min mm  --longueur-min-piece mm  --largeur-min-bord mm  --jeu mm
  *   --marge-bord mm    --marge-commande %       --taille-trou-max mm   --ordre-murs auto|donne
+ *   --sans-languette true|false
  *
  * Sorties : calculer et variantes écrivent un compte rendu en français (ou du JSON avec --json).
  * page écrit une page HTML autonome, dynamique, qui embarque le même moteur.
@@ -44,7 +45,8 @@ const REGLAGES = {
   'marge-bord': ['margeBord', Number],
   'marge-commande': ['margeCommandePct', Number],
   'taille-trou-max': ['tailleTrouMax', Number],
-  'ordre-murs': ['ordreMurs', String]
+  'ordre-murs': ['ordreMurs', String],
+  'sans-languette': ['sansLanguette', function (v) { return v === true || v === 'true' || v === '1'; }]
 };
 
 const EXEMPLE = {
@@ -98,7 +100,9 @@ function lireDrapeaux(args) {
 function appliquerReglages(entree, drapeaux) {
   entree.options = entree.options || {};
   Object.keys(REGLAGES).forEach(function (k) {
-    if (drapeaux[k] !== undefined && drapeaux[k] !== true) entree.options[REGLAGES[k][0]] = REGLAGES[k][1](drapeaux[k]);
+    if (drapeaux[k] === undefined) return;
+    if (drapeaux[k] === true && k !== 'sans-languette') return;
+    entree.options[REGLAGES[k][0]] = REGLAGES[k][1](drapeaux[k]);
   });
 }
 
