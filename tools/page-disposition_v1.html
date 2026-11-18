@@ -63,7 +63,12 @@
   footer.credit { margin: 0; padding: 8px 20px 20px; text-align: center; color: var(--doux); font-size: 12px; }
   footer.credit a { color: var(--accent); text-decoration: none; }
   footer.credit a:hover { text-decoration: underline; }
-  @media print { aside, .barre, header .sous, .variantes-carte { display: none !important; } main { display: block; padding: 0; } .carte { break-inside: avoid; } }
+  @media print {
+    aside, .barre, header .sous, .variantes-carte { display: none !important; }
+    main { display: block; padding: 0; }
+    .carte { break-inside: avoid; }
+    svg text { fill: #111 !important; }
+  }
 </style>
 </head>
 <body>
@@ -181,6 +186,9 @@
       var refend = h('input', { type: 'checkbox' });
       refend.checked = l.refendable !== false;
       refend.addEventListener('change', function () { if (refend.checked) delete l.refendable; else l.refendable = false; planifier(); });
+      var lang = h('input', { type: 'checkbox' });
+      lang.checked = l.languettePresente !== false;
+      lang.addEventListener('change', function () { if (lang.checked) delete l.languettePresente; else l.languettePresente = false; planifier(); });
       zone.appendChild(h('div', { class: 'lame-carte' },
         h('div', { class: 'lame-entete' },
           h('strong', { texte: l.libelle || ('Lame ' + (i + 1)) }),
@@ -193,10 +201,12 @@
           h('div', {}, h('label', { texte: 'Quantité en stock' }), champ(l, 'quantite', { placeholder: 'vide = à acheter' })),
           h('div', {}, h('label', { texte: 'Prix' }), champ(l, 'prix')),
           h('div', {}, h('label', { texte: 'Lames par paquet' }), champ(l, 'lamesParPaquet'))),
-        h('div', { class: 'case-ligne' }, refend, h('span', { texte: 'Recoupe en largeur possible' }))));
+        h('div', { class: 'case-ligne' }, refend, h('span', { texte: 'Recoupe en largeur possible' })),
+        h('div', { class: 'case-ligne' }, lang, h('span', { texte: 'Languette encore présente' }))));
     });
     zone.appendChild(h('div', { class: 'note', texte: 'Quantité vide : ces lames sont à acheter, sans limite. Une quantité : c\'est ton stock, le calcul ne le dépasse pas.' }));
     zone.appendChild(h('div', { class: 'note', texte: 'Recoupe en largeur : seulement la dernière lame du mur. Les autres gardent leur largeur d\'usine, sinon la languette de raccord est perdue. Décoche si même cette dernière lame ne peut pas être recoupée.' }));
+    zone.appendChild(h('div', { class: 'note', texte: 'Languette absente : la lame reste utilisable (un listel peut rattraper). Le calcul préfère celles qui ont encore la languette.' }));
     zone.appendChild(h('div', { class: 'barre' }, h('button', { type: 'button', texte: 'Ajouter une lame', onclick: function () {
       etat.lames.push({ id: 'L' + (etat.lames.length + 1), largeurUtile: 90, longueur: 2400 }); dessinerLames(); planifier(); } })));
   }
@@ -351,17 +361,37 @@
     if (o.motif === 'aleatoire') { extra.appendChild(h('label', { texte: 'Graine (change le tirage)' })); extra.appendChild(champ(o, 'graine')); }
     zone.appendChild(h('label', { texte: 'Plaque sans languette' }));
     zone.appendChild(selectBooleen('sansLanguette', ['Non, la languette reste intacte', 'Oui, une chute haute peut être recoupée']));
+    zone.appendChild(h('label', { texte: 'Embouts de bout (languette / encoche)' }));
+    if (o.emboutsBout === undefined || o.emboutsBout === null) o.emboutsBout = true;
+    zone.appendChild(selectBooleen('emboutsBout', ['Non, pas d\'embouts de bout', 'Oui, embouts de bout présents']));
+    zone.appendChild(h('label', { texte: 'Pose dans le rang' }));
+    if (!o.sensPoseRang) o.sensPoseRang = 'gauche-droite';
+    zone.appendChild(selectOptions('sensPoseRang', [['gauche-droite', 'De gauche à droite'], ['droite-gauche', 'De droite à gauche']]));
+    zone.appendChild(h('label', { texte: 'Languette de chant (sur la longueur)' }));
+    if (!o.sensLanguetteChant) o.sensLanguetteChant = 'haut';
+    zone.appendChild(selectOptions('sensLanguetteChant', [['haut', 'Vers le haut'], ['bas', 'Vers le bas']]));
+    zone.appendChild(h('label', { texte: 'Languette de bout au joint' }));
+    if (!o.sensLanguetteBout) o.sensLanguetteBout = 'droite';
+    zone.appendChild(selectOptions('sensLanguetteBout', [['droite', 'Vers la droite (pièce de gauche)'], ['gauche', 'Vers la gauche (pièce de droite)']]));
+    zone.appendChild(h('label', { texte: 'Sens de pose et languettes confirmés' }));
+    if (o.poseLanguettesConfirmees === undefined || o.poseLanguettesConfirmees === null) o.poseLanguettesConfirmees = false;
+    zone.appendChild(selectBooleen('poseLanguettesConfirmees', ['Non, à confirmer', 'Oui, confirmés pour ce projet']));
     zone.appendChild(h('label', { texte: 'Coupe des lames longues' }));
-    zone.appendChild(selectOptions('prioriteCoupe', [['chute', 'Économiser les chutes'], ['longueur', 'Couvrir le rang en entier']]));
-    zone.appendChild(h('label', { texte: 'Sens de pose' }));
+    zone.appendChild(selectOptions('prioriteCoupe', [['longueur', 'Pièces les plus longues'], ['chute', 'Économiser les chutes']]));
+    zone.appendChild(h('label', { texte: 'Orientation des lames' }));
     zone.appendChild(selectOptions('orientation', [['auto', 'Meilleur choix automatique'], ['horizontal', 'Horizontal'], ['vertical', 'Vertical']]));
     zone.appendChild(h('label', { texte: 'Motif des largeurs' }));
     zone.appendChild(motif);
     zone.appendChild(extra);
     var g = h('div', { class: 'grille2' });
-    [['decalageMin', 'Décalage min. des joints', 300], ['longueurMinPiece', 'Longueur min. d\'une pièce', 400],
+    [['decalageMin', 'Décalage min. des joints (rang voisin)', 300],
+     ['decalageProfondeur', 'Profondeur du décalage (nb de rangs)', 3],
+     ['decalageMemeLargeur', 'Décalage si même largeur (N-2, N-3)', 300],
+     ['decalageTouteLargeur', 'Décalage toutes largeurs (3 rangs)', 200],
+     ['longueurMinPiece', 'Longueur min. d\'une pièce', 400],
      ['largeurMinBord', 'Largeur min. d\'un rang de bord', 30], ['jeuEntreLames', 'Joint entre rangs', 0],
      ['margeBord', 'Marge au bord du mur', 0], ['margeCommandePct', 'Marge de commande (%)', 10],
+     ['epaisseurScie', 'Épaisseur de lame de scie', 3],
      ['tailleTrouMax', 'Taille max. d\'un trou (prise)', 250]].forEach(function (d) {
       var input = champ(o, d[0], { placeholder: String(d[2]) });
       g.appendChild(h('div', {}, h('label', { texte: d[1] }), input));
@@ -374,7 +404,12 @@
 
   function couleur(cle, res) {
     var cles = [];
-    res.commande.forEach(function (c) { if (cles.indexOf(c.famille) < 0) cles.push(c.famille); });
+    var largeur = null;
+    res.commande.forEach(function (c) {
+      if (cles.indexOf(c.famille) < 0) cles.push(c.famille);
+      if (c.famille === cle) largeur = c.largeurUtile;
+    });
+    if (largeur != null && Math.abs(largeur - 185) < 0.5) return '#e2d2b0';
     return PALETTE[Math.max(0, cles.indexOf(cle)) % PALETTE.length];
   }
 
@@ -423,8 +458,12 @@
       var g = el('g', {});
       var biseau = texteCoupe(p);
       var tip = 'Rang ' + p.rang + ', pièce ' + p.index + ' : ' + etiquetteLongueur(p) + ' x ' + f(p.largeurRang) + ' mm'
+        + (p.codeLame ? ', code ' + p.codeLame : '')
         + (p.pointeLongue && p.pointeCourte && Math.abs(p.pointeLongue - p.pointeCourte) > 0.5 ? ' (pointe longue / pointe courte)' : '')
         + (p.origine === 'chute' ? ', issue d\'une chute' : ', lame neuve ' + p.typeId + ' (' + f(p.longueurLame) + ' mm)')
+        + (p.emboutGauche || p.emboutDroit
+          ? ', embouts ' + (p.emboutGauche || 'droit') + ' / ' + (p.emboutDroit || 'droit')
+          : '')
         + (biseau ? ', ' + biseau : (p.coupe ? ', coupée en bout' : '')) + (p.refendu ? ', refendue' : '') + (p.raccord ? ', raccord' : '')
         + (p.manquante ? ', HORS STOCK' : '') + (p.percements.length ? ', à percer : ' + p.percements.join(', ') : '');
       el('title', { texte: tip }, g);
@@ -432,10 +471,46 @@
       if (p.origine === 'chute') el('rect', { x: p.x, y: y, width: p.w, height: p.h, fill: 'url(#' + idPat + ')', stroke: 'none' }, g);
       var horiz = m.orientation === 'horizontal';
       var longueurPx = horiz ? p.w : p.h, epaisseurPx = horiz ? p.h : p.w;
-      if (longueurPx > fs * 4.6 && epaisseurPx > fs * 0.9) {
-        var cx = p.x + p.w / 2, cy = y + p.h / 2;
-        var t = el('text', { x: cx, y: cy + fs * 0.33, 'text-anchor': 'middle', 'font-size': fs * 0.78, fill: '#2b2620', 'font-family': 'Helvetica, Arial, sans-serif', texte: etiquetteLongueur(p) }, g);
+      var cx = p.x + p.w / 2, cy = y + p.h / 2;
+      function libelleAffiche(mode) {
+        var code = p.codeLame || '';
+        var long = etiquetteLongueur(p);
+        if (mode === 'code') return code;
+        if (mode === 'court') {
+          var c = code.replace(/^Chute de /, 'c.').replace(/ · /g, '·');
+          return c ? (c + '·' + long) : long;
+        }
+        return code ? (code + ' · ' + long) : long;
+      }
+      function poserTexte(lib, poids) {
+        if (!lib) return;
+        var charW = 0.56;
+        var fsTexte = Math.min(epaisseurPx * 0.52, longueurPx / Math.max(4, lib.length * charW), fs * 0.82);
+        fsTexte = Math.max(fs * 0.28, fsTexte);
+        if (fsTexte > epaisseurPx * 0.85 || fsTexte * lib.length * charW > longueurPx * 0.95) {
+          lib = libelleAffiche('court');
+          fsTexte = Math.min(epaisseurPx * 0.52, longueurPx / Math.max(4, lib.length * charW), fs * 0.82);
+          fsTexte = Math.max(fs * 0.28, fsTexte);
+        }
+        if (fsTexte * lib.length * charW > longueurPx * 0.98 || epaisseurPx < fs * 0.55) {
+          lib = libelleAffiche('code');
+          if (!lib) return;
+          fsTexte = Math.min(epaisseurPx * 0.62, longueurPx / Math.max(2, lib.length * charW), fs * 0.75);
+          fsTexte = Math.max(fs * 0.26, fsTexte);
+        }
+        if (epaisseurPx < fs * 0.45 || longueurPx < fs * 0.9) return;
+        var t = el('text', {
+          x: cx, y: cy + fsTexte * 0.35, 'text-anchor': 'middle', 'font-size': fsTexte,
+          fill: '#1a1612', 'font-weight': poids || '700', 'font-family': 'Helvetica, Arial, sans-serif',
+          stroke: '#fff', 'stroke-width': Math.max(fsTexte * 0.22, 1.2), 'paint-order': 'stroke fill',
+          texte: lib
+        }, g);
         if (!horiz) t.setAttribute('transform', 'rotate(-90 ' + cx + ' ' + cy + ')');
+      }
+      if (longueurPx > fs * 2.2 && epaisseurPx > fs * 0.55) {
+        poserTexte(libelleAffiche('plein'), '700');
+      } else if (p.codeLame && epaisseurPx > fs * 0.45 && longueurPx > fs * 0.9) {
+        poserTexte(libelleAffiche('code'), '700');
       }
       var trait = Math.max(1, fs * 0.16);
       var s = Math.min(p.w, p.h) * 0.55;
@@ -456,10 +531,11 @@
     var horizontal = m.orientation === 'horizontal';
     Object.keys(rangs).forEach(function (k) {
       var p = rangs[k];
+      var libRang = 'R' + k + ' · ' + f(p.largeurRang);
       if (horizontal) {
-        el('text', { x: W + fs * 0.5, y: H - (p.y + p.h / 2) + fs * 0.3, 'font-size': fs * 0.7, fill: '#6f665b', 'font-family': 'Helvetica, Arial, sans-serif', texte: f(p.largeurRang) });
+        el('text', { x: W + fs * 0.5, y: H - (p.y + p.h / 2) + fs * 0.3, 'font-size': fs * 0.7, fill: '#6f665b', 'font-family': 'Helvetica, Arial, sans-serif', texte: libRang });
       } else {
-        el('text', { x: p.x + p.w / 2, y: -fs * 0.6, 'font-size': fs * 0.6, 'text-anchor': 'middle', fill: '#6f665b', 'font-family': 'Helvetica, Arial, sans-serif', texte: f(p.largeurRang) });
+        el('text', { x: p.x + p.w / 2, y: -fs * 0.6, 'font-size': fs * 0.6, 'text-anchor': 'middle', fill: '#6f665b', 'font-family': 'Helvetica, Arial, sans-serif', texte: libRang });
       }
     });
     var yc = H + fs * 1.8;
@@ -484,10 +560,10 @@
       var L = parRang[k].slice().sort(function (a, b) { return (a.raccord ? 1 : 0) - (b.raccord ? 1 : 0) || (m.orientation === 'horizontal' ? a.x - b.x : a.y - b.y); });
       var txt = L.map(function (p) {
         var coupes = texteCoupe(p);
-        return etiquetteLongueur(p) + (coupes ? ' (' + coupes + ')' : '') + (p.origine === 'chute' ? ' (chute)' : '') + (p.raccord ? ' (raccord ' + f(p.largeurRang) + ')' : '') + (p.percements.length ? ' (percer : ' + p.percements.join(', ') + ')' : '');
+        return (p.codeLame ? '[' + p.codeLame + '] ' : '') + etiquetteLongueur(p) + (coupes ? ' (' + coupes + ')' : '') + (p.origine === 'chute' ? ' (chute)' : '') + (p.raccord ? ' (raccord ' + f(p.largeurRang) + ')' : '') + (p.percements.length ? ' (percer : ' + p.percements.join(', ') + ')' : '');
       }).join('  |  ');
       var r0 = parRang[k].filter(function (p) { return !p.raccord; })[0] || parRang[k][0];
-      t.appendChild(h('tr', {}, h('td', { texte: k }), h('td', { texte: f(r0.largeurRang) + (r0.refendu ? ' (refendu)' : '') }), h('td', { texte: txt })));
+      t.appendChild(h('tr', {}, h('td', { texte: 'R' + k }), h('td', { texte: f(r0.largeurRang) + (r0.refendu ? ' (refendu)' : '') }), h('td', { texte: txt })));
     });
     return t;
   }
@@ -506,6 +582,18 @@
       kp.appendChild(h('div', { class: 'kpi' }, h('b', { texte: String(k[0]) }), h('span', { texte: k[1] })));
     });
     resume.appendChild(kp);
+    if (res.codesMarques && res.codesMarques.length) {
+      resume.appendChild(h('div', { class: 'note', texte: 'Codes à écrire sur le bois avant de scier. La chute se marque « Chute de » suivi du code, et ce nom sort du stock avec elle.' }));
+      var tc = h('table', { class: 'pieces' }, h('tr', {}, h('th', { texte: 'Code' }), h('th', { texte: 'Barre' }), h('th', { texte: 'Dimensions' })));
+      res.codesMarques.forEach(function (c) {
+        tc.appendChild(h('tr', {},
+          h('td', { texte: c.code }),
+          h('td', { texte: c.libelle || c.typeId }),
+          h('td', { texte: (c.largeurUtile && c.longueur) ? (f(c.largeurUtile) + ' × ' + f(c.longueur) + ' mm') : '—' })
+        ));
+      });
+      resume.appendChild(tc);
+    }
 
     var av = document.getElementById('zone-avert');
     av.innerHTML = '';

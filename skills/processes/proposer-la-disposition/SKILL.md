@@ -75,7 +75,9 @@ Avant de commencer:
 
 Résume en trois lignes: le mur (ou les murs), les lames disponibles, le mode (stock ou achat), les réglages qui comptent (décalage des joints, marge de commande). Signale si tu gardes les valeurs de départ.
 
-> «Je pars de [résumé]. Je garde les réglages habituels sauf si tu as une préférence. Ça te va?»
+**Avant tout calcul**, vérifie dans `entree.json` les options `sensPoseRang`, `sensLanguetteChant`, `sensLanguetteBout` et `poseLanguettesConfirmees`. Si elles manquent ou si `poseLanguettesConfirmees` n'est pas `true`, pose les trois questions du process `ouvrir-un-projet-mur` (étape 3b), une à une, écris les réponses, puis seulement :
+
+> «Je pars de [résumé], pose [gauche→droite / droite→gauche], languette de chant [haut/bas], languette de bout [droite/gauche]. Ça te va?»
 
 ← Reformulation
 

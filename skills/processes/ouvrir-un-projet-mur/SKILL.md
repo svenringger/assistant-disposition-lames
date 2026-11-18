@@ -97,6 +97,16 @@ Selon le mode:
 
 Pour un produit nommé, lis la fiche technique du fabricant et note la source.
 
+### 3b. Sens de pose et languettes (obligatoire)
+
+**À chaque projet**, avant le premier calcul, pose ces questions **une à une**, même si la mémoire a déjà un mode de pose. Note les réponses dans `entree.json` (`options`) et passe `poseLanguettesConfirmees` à `true` seulement après confirmation explicite.
+
+1. **Dans le rang**, le monteur commence-t-il à **gauche** ou à **droite** ? (`sensPoseRang` : `gauche-droite` ou `droite-gauche`)
+2. La **languette de chant** (sur la longueur) va-t-elle vers le **haut** ou vers le **bas** ? (`sensLanguetteChant` : `haut` ou `bas`)
+3. Au joint de bout, la **languette de bout** pointe-t-elle vers la **droite** ou vers la **gauche** ? (`sensLanguetteBout` : `droite` = languette à droite de la pièce de gauche ; `gauche` = languette à gauche de la pièce de droite)
+
+Sans ces trois réponses confirmées, le calcul tourne avec des valeurs de départ et signale un avertissement. N'écris pas `poseLanguettesConfirmees: true` tant que la personne n'a pas validé.
+
 ### 4. Cerner le goût
 
 Demande, une question à la fois: ce qui plaît, ce qui déplaît, le sens déjà envisagé (ou ouvert), la finition envisagée. Reprends ce que la mémoire connaît déjà et fais-le confirmer.

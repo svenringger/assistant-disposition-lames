@@ -19,9 +19,14 @@
  * Réglages (remplacent les options du fichier) :
  *   --orientation auto|horizontal|vertical   --motif auto|uniforme|sequence|aleatoire
  *   --famille <clé ou largeur>               --sequence 90,140,90       --graine 2
- *   --decalage-min mm  --longueur-min-piece mm  --largeur-min-bord mm  --jeu mm
+ *   --decalage-min mm  --decalage-profondeur n  --decalage-meme-largeur mm
+ *   --decalage-toute-largeur mm
+ *   --longueur-min-piece mm  --largeur-min-bord mm  --jeu mm
  *   --marge-bord mm    --marge-commande %       --taille-trou-max mm   --ordre-murs auto|donne
- *   --sans-languette true|false
+ *   --sans-languette true|false   --epaisseur-scie mm
+ *   --sens-pose-rang gauche-droite|droite-gauche
+ *   --sens-languette-chant haut|bas   --sens-languette-bout droite|gauche
+ *   --pose-languettes-confirmees true|false
  *
  * Sorties : calculer et variantes écrivent un compte rendu en français (ou du JSON avec --json).
  * page écrit une page HTML autonome, dynamique, qui embarque le même moteur.
@@ -39,6 +44,9 @@ const REGLAGES = {
   'sequence': ['sequence', function (v) { return String(v).split(',').map(function (s) { return s.trim(); }).filter(Boolean); }],
   'graine': ['graine', Number],
   'decalage-min': ['decalageMin', Number],
+  'decalage-profondeur': ['decalageProfondeur', Number],
+  'decalage-meme-largeur': ['decalageMemeLargeur', Number],
+  'decalage-toute-largeur': ['decalageTouteLargeur', Number],
   'longueur-min-piece': ['longueurMinPiece', Number],
   'largeur-min-bord': ['largeurMinBord', Number],
   'jeu': ['jeuEntreLames', Number],
@@ -46,7 +54,12 @@ const REGLAGES = {
   'marge-commande': ['margeCommandePct', Number],
   'taille-trou-max': ['tailleTrouMax', Number],
   'ordre-murs': ['ordreMurs', String],
-  'sans-languette': ['sansLanguette', function (v) { return v === true || v === 'true' || v === '1'; }]
+  'sans-languette': ['sansLanguette', function (v) { return v === true || v === 'true' || v === '1'; }],
+  'epaisseur-scie': ['epaisseurScie', Number],
+  'sens-pose-rang': ['sensPoseRang', String],
+  'sens-languette-chant': ['sensLanguetteChant', String],
+  'sens-languette-bout': ['sensLanguetteBout', String],
+  'pose-languettes-confirmees': ['poseLanguettesConfirmees', function (v) { return v === true || v === 'true' || v === '1'; }]
 };
 
 const EXEMPLE = {

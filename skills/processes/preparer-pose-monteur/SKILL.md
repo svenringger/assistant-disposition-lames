@@ -94,7 +94,7 @@ Prépare, sans code ni JSON, pour la personne:
 ### 3. Rédiger le descriptif pour le monteur
 
 Avec `templates/descriptif-monteur_v1.md` et le détail rang par rang de l'outil. Écris en mots simples, sans jargon inutile, chaque consigne vérifiable:
-- Ce qu'on veut obtenir, sens, point de départ, arrangement des largeurs, dernier rang
+- Ce qu'on veut obtenir, sens, point de départ dans le rang (`sensPoseRang`), languette de chant (`sensLanguetteChant`) et languette de bout (`sensLanguetteBout`), arrangement des largeurs, dernier rang. Si `poseLanguettesConfirmees` n'est pas vrai, arrête-toi et fais confirmer avant le descriptif
 - Support à contrôler, préparation, acclimatation, finition avant pose
 - Fixation et jeux, **selon la notice**, avec la compatibilité phonique si elle s'applique (rien ne doit retraverser l'isolation)
 - Ouvertures, raccords, prises et coins. Au coin à 90°, coupe droite: quelle lame va au fond, quelle lame est plus courte, et pourquoi ce sens économise les lames. Au coin à 270°, pointe longue et pointe courte

@@ -6,7 +6,21 @@
  *
  * Entrée (objet JSON) : { projet, lames[], murs[], options{} }
  *   lames[] : { id, largeurUtile, longueur, epaisseur?, famille?, quantite? (vide = illimité),
- *               prix?, lamesParPaquet?, refendable? (défaut vrai), libelle? }   dimensions en mm
+ *               prix?, lamesParPaquet?, refendable? (défaut vrai),
+ *               languettePresente? (défaut vrai), codes? (lettres déjà marquées, une par barre),
+ *               libelle? }   dimensions en mm
+ *             Chaque barre ouverte reçoit un codeLame unique (A, B… ou codes saisis).
+ *             Une lettre déjà prise est ignorée. La chute d'une coupe s'appelle
+ *             « Chute de X » et sort du stock sous ce nom, plus courte que la barre.
+ *             emboutsBout (défaut vrai) : chaque barre neuve a une languette de bout
+ *             et une encoche. Le sens exact se règle avec sensLanguetteBout.
+ *             sensPoseRang (défaut gauche-droite) : sens de remplissage d'un rang.
+ *             sensLanguetteChant (défaut haut) : languette sur la longueur, vers le haut
+ *             ou vers le bas (renseigné pour la pose ; ne change pas les longueurs).
+ *             sensLanguetteBout (défaut droite) : au joint, languette vers la droite
+ *             (pièce de gauche) ou vers la gauche (pièce de droite). Un trait neuf est droit.
+ *             poseLanguettesConfirmees (défaut faux) : à true seulement après confirmation
+ *             humaine du sens de pose et des languettes sur ce projet.
  *   murs[]  : { id, largeur, hauteur, orientation?, epaisseurSupport?, bords?, obstacles[] }
  *             largeur et hauteur = support (mur, meuble), pas forcément la face habillée
  *             bords : { gauche, droite, bas, haut } chacun { type: ras|joint|angle,
@@ -18,11 +32,20 @@
  *   options : voir DEFAUTS (réglages modifiables, jamais des règles de l'art)
  *             sansLanguette (défaut faux) : une chute plus haute que le rang peut être
  *             recoupée à la hauteur de ce rang. Faux pour une lame à languette.
+ *             epaisseurScie (défaut 3 mm) : matière perdue à chaque coupe (longueur ou
+ *             refente). 0 = ignorer. À valider par projet.
  *
  * Principe : un mur est couvert par des rangs (largeurs de lames empilées). Chaque rang est rempli
- * par des pièces bout à bout. Les joints de deux rangs voisins restent éloignés d'au moins
- * decalageMin. Les chutes réutilisables (>= longueurMinPiece) alimentent les rangs suivants, y
- * compris ceux des autres murs du lot.
+ * par des pièces bout à bout. Les joints du rang N restent éloignés d'au moins decalageMin de
+ * ceux du rang N-1 (decalageMin). Sur les rangs N-2 et N-3, aucun joint à moins de
+ * decalageTouteLargeur (défaut 200 mm), quelle que soit la largeur. Une lame pleine sans
+ * joint ne masque pas le rang plus loin. À largeur égale, decalageMemeLargeur s'ajoute.
+ * Par défaut, chaque pièce posée est la plus longue qui tient (prioriteCoupe longueur).
+ * Chaque barre a un code unique, retiré du stock dès qu'elle est posée. La chute d'une
+ * coupe s'appelle « Chute de X » et reste plus courte que la barre moins la pièce moins
+ * le trait de scie. Les embouts de bout (languette / encoche) s'orientent selon
+ * sensLanguetteBout. Les chutes réutilisables (>= longueurMinPiece) alimentent les rangs
+ * suivants, y compris ceux des autres murs du lot.
  *
  * Les règles esthétiques et techniques (valeurs conseillées, cas d'usage) vivent dans les
  * compétences de l'assistant, pas ici : ce fichier ne fait que calculer.
@@ -43,6 +66,9 @@
     graine: 1,
     jeuEntreLames: 0,
     decalageMin: 300,
+    decalageProfondeur: 3,
+    decalageMemeLargeur: 300,
+    decalageTouteLargeur: 200,
     longueurMinPiece: 400,
     largeurMinBord: 30,
     margeBord: 0,
@@ -50,12 +76,19 @@
     pasCoupe: 5,
     tailleTrouMax: 250,
     ordreMurs: 'auto',
-    prioriteCoupe: 'chute',
-    sansLanguette: false
+    prioriteCoupe: 'longueur',
+    sansLanguette: false,
+    emboutsBout: true,
+    sensPoseRang: 'gauche-droite',
+    sensLanguetteChant: 'haut',
+    sensLanguetteBout: 'droite',
+    poseLanguettesConfirmees: false,
+    epaisseurScie: 3
   };
 
-  var OPTIONS_NUMERIQUES = ['jeuEntreLames', 'decalageMin', 'longueurMinPiece', 'largeurMinBord',
-    'margeBord', 'margeCommandePct', 'pasCoupe', 'graine', 'tailleTrouMax'];
+  var OPTIONS_NUMERIQUES = ['jeuEntreLames', 'decalageMin', 'decalageProfondeur', 'decalageMemeLargeur', 'decalageTouteLargeur',
+    'longueurMinPiece', 'largeurMinBord', 'margeBord', 'margeCommandePct', 'pasCoupe', 'graine',
+    'tailleTrouMax', 'epaisseurScie'];
 
   function arrondi(x) { return Math.round(x * 10) / 10; }
   function num(x) { return (x === undefined || x === null || x === '') ? NaN : Number(x); }
@@ -88,6 +121,19 @@
     if (!(o.pasCoupe > 0)) erreurs.push('Option pasCoupe invalide.');
     if (o.prioriteCoupe !== 'chute' && o.prioriteCoupe !== 'longueur') erreurs.push('Option prioriteCoupe invalide.');
     if (o.sansLanguette !== true && o.sansLanguette !== false) erreurs.push('Option sansLanguette invalide.');
+    if (o.emboutsBout !== true && o.emboutsBout !== false) erreurs.push('Option emboutsBout invalide.');
+    if (o.sensPoseRang !== 'gauche-droite' && o.sensPoseRang !== 'droite-gauche') {
+      erreurs.push('Option sensPoseRang invalide (gauche-droite ou droite-gauche).');
+    }
+    if (o.sensLanguetteChant !== 'haut' && o.sensLanguetteChant !== 'bas') {
+      erreurs.push('Option sensLanguetteChant invalide (haut ou bas).');
+    }
+    if (o.sensLanguetteBout !== 'droite' && o.sensLanguetteBout !== 'gauche') {
+      erreurs.push('Option sensLanguetteBout invalide (droite ou gauche).');
+    }
+    if (o.poseLanguettesConfirmees !== true && o.poseLanguettesConfirmees !== false) {
+      erreurs.push('Option poseLanguettesConfirmees invalide.');
+    }
 
     var familles = {};
     var cles = [];
@@ -105,11 +151,23 @@
       var q = (l.quantite === undefined || l.quantite === null || l.quantite === '') ? Infinity : num(l.quantite);
       if (!(q >= 0)) erreurs.push('Lame ' + id + ' : quantité invalide.');
       var cle = l.famille ? String(l.famille) : (lu + 'x' + (ep === null ? '' : ep));
+      var codes = [];
+      if (Array.isArray(l.codes)) {
+        l.codes.forEach(function (c) {
+          var s = (c === undefined || c === null) ? '' : String(c).trim();
+          if (s) codes.push(s);
+        });
+      }
+      if (codes.length && isFinite(q) && codes.length !== q) {
+        avert.push('Lame ' + id + ' : ' + codes.length + ' code(s) pour ' + q + ' barre(s). Les codes manquants seront générés.');
+      }
       var t = {
         id: id, famille: cle, largeurUtile: lu, longueur: lo, epaisseur: ep, quantite: q,
         prix: (l.prix === undefined || l.prix === null || l.prix === '') ? null : num(l.prix),
         lamesParPaquet: (l.lamesParPaquet === undefined || l.lamesParPaquet === null || l.lamesParPaquet === '') ? null : num(l.lamesParPaquet),
         refendable: l.refendable !== false,
+        languettePresente: l.languettePresente !== false,
+        codes: codes,
         libelle: l.libelle || (texte(lu) + ' x ' + texte(lo) + ' mm')
       };
       types.push(t);
@@ -339,29 +397,137 @@
     return l * 0.1;
   }
 
-  function evaluer(L, c, r, prev, dec, o, interdits, extra) {
+  function consoStock(L, e, extra, o) {
+    var pris = e + (extra ? extra(e) : 0);
+    if (pris >= L - EPS) return pris;
+    return pris + (o.epaisseurScie || 0);
+  }
+
+  function contraintesJoints(historique, familleCourante, o, facteur) {
+    var out = [];
+    var hist = historique || [];
+    var profondeur = Math.max(1, Math.floor(o.decalageProfondeur || 3));
+    var decVoisin = (o.decalageMin || 0) * facteur;
+    var decMeme = ((o.decalageMemeLargeur !== undefined && o.decalageMemeLargeur !== null)
+      ? o.decalageMemeLargeur : o.decalageMin) * facteur;
+    var decToutes = ((o.decalageTouteLargeur !== undefined && o.decalageTouteLargeur !== null)
+      ? o.decalageTouteLargeur : 200) * facteur;
+    hist.slice(0, profondeur).forEach(function (h, dist) {
+      var sansJointEntre = true;
+      for (var i = 0; i < dist; i++) {
+        if ((hist[i].joints || []).length) { sansJointEntre = false; break; }
+      }
+      var dec = decToutes;
+      if (dist === 0 || sansJointEntre) dec = Math.max(dec, decVoisin);
+      else if (h.famille === familleCourante) dec = Math.max(dec, decMeme);
+      if (!(dec > 0)) return;
+      (h.joints || []).forEach(function (pos) { out.push({ pos: pos, dec: dec }); });
+    });
+    return out;
+  }
+
+  function nomChute(code) {
+    var m = / · (\d+)$/.exec(code);
+    if (code.indexOf('Chute de ') === 0 && m) {
+      return code.slice(0, m.index) + ' · ' + (Number(m[1]) + 1);
+    }
+    if (code.indexOf('Chute de ') === 0) return code + ' · 2';
+    return 'Chute de ' + code;
+  }
+
+  function complementEmbout(e) {
+    if (e === 'languette') return 'encoche';
+    if (e === 'encoche') return 'languette';
+    return null;
+  }
+
+  /** Au joint, embout exposé à droite de la pièce de gauche. */
+  function emboutDroitAuJoint(o) {
+    return o && o.sensLanguetteBout === 'gauche' ? 'encoche' : 'languette';
+  }
+
+  function emboutsNeuve(souhaiteGauche, suiteAttendue, o) {
+    if (souhaiteGauche === 'encoche') return { gauche: 'encoche', droit: 'languette' };
+    if (souhaiteGauche === 'languette') return { gauche: 'languette', droit: 'encoche' };
+    var d = emboutDroitAuJoint(o || {});
+    return { gauche: complementEmbout(d) || 'encoche', droit: d };
+  }
+
+  function orienterEmbouts(g, d, souhaiteGauche) {
+    g = g || 'droit';
+    d = d || 'droit';
+    if (!souhaiteGauche || g === souhaiteGauche) return { gauche: g, droit: d };
+    if (d === souhaiteGauche) return { gauche: d, droit: g };
+    return { gauche: g, droit: d };
+  }
+
+  function malusEmbout(g, souhaiteGauche) {
+    if (!souhaiteGauche) return 0;
+    if (g === souhaiteGauche) return 0;
+    return 1;
+  }
+
+  function evaluer(L, c, r, contraintes, o, interdits, extra) {
     if (!extra) extra = function () { return 0; };
-    function tient(e) { return e + extra(e) <= L + EPS; }
-    if (tient(r)) return { e: r, cout: coutChute(L - r - extra(r), o) };
+    if (!contraintes) contraintes = [];
+    function tient(e) { return consoStock(L, e, extra, o) <= L + EPS; }
+    if (tient(r)) return { e: r, cout: coutChute(L - consoStock(L, r, extra, o), o) };
     var emax = Math.min(L, r - o.longueurMinPiece);
     var best = null;
     for (var e = emax; e >= o.longueurMinPiece - EPS; e -= o.pasCoupe) {
       if (!tient(e)) continue;
       var pos = c + e;
       var ok = true;
-      for (var k = 0; k < prev.length; k++) {
-        if (Math.abs(prev[k] - pos) < dec - EPS) { ok = false; break; }
+      for (var k = 0; k < contraintes.length; k++) {
+        if (Math.abs(contraintes[k].pos - pos) < contraintes[k].dec - EPS) { ok = false; break; }
       }
       if (!ok) continue;
       for (var q = 0; q < interdits.length && ok; q++) {
         if (pos > interdits[q][0] - EPS && pos < interdits[q][1] + EPS) ok = false;
       }
       if (!ok) continue;
-      var cout = coutChute(L - e - extra(e), o);
+      var cout = coutChute(L - consoStock(L, e, extra, o), o);
       if (!best || cout < best.cout - 1e-9) best = { e: e, cout: cout };
       if (best.cout <= 1e-9) break;
     }
     return best;
+  }
+
+  function aLanguette(cand) {
+    if (cand.languettePresente === false) return false;
+    if (cand.type && cand.type.languettePresente === false) return false;
+    return true;
+  }
+
+  function codeDepuisIndex(n) {
+    var s = '';
+    var i = n;
+    do {
+      s = String.fromCharCode(65 + (i % 26)) + s;
+      i = Math.floor(i / 26) - 1;
+    } while (i >= 0);
+    return s;
+  }
+
+  function allouerCode(ctx, typeId) {
+    var file = ctx.filesCodes[typeId];
+    var code;
+    if (file && file.length) {
+      code = String(file.shift());
+    } else {
+      while (ctx.codesReserves[codeDepuisIndex(ctx.codeIndex)]) ctx.codeIndex++;
+      code = codeDepuisIndex(ctx.codeIndex++);
+      ctx.codesReserves[code] = true;
+    }
+    var t = ctx.typesById[typeId];
+    ctx.codesUtilises.push({
+      code: code,
+      typeId: typeId,
+      libelle: t ? t.libelle : typeId,
+      largeurUtile: t ? t.largeurUtile : null,
+      longueur: t ? t.longueur : null
+    });
+    return code;
   }
 
   function comparerCles(a, b) {
@@ -395,40 +561,60 @@
     return pools;
   }
 
-  function choisirPiece(ctx, rang, c, r, prev, interdits, besoin) {
+  function choisirPiece(ctx, rang, c, r, historique, interdits, besoin) {
     var o = ctx.o;
     besoin = besoin || { bout: 'droit', supDebut: 0, supFin: 0, E: 0 };
     var fam = ctx.familles[rang.source];
     var pools = poolsPourRang(ctx, rang);
     var poolExact = pools[0].pool;
     var base = [];
+    var veutEmbouts = o.emboutsBout !== false;
+    var souhaiteGauche = veutEmbouts ? (besoin.emboutGauche || null) : null;
     pools.forEach(function (p) {
       p.pool.forEach(function (it, idx) {
         var Lu = longueurUtilisable(it.L, it.bout || 'droit', besoin.bout, besoin.E);
-        if (Lu > EPS) base.push({
-          origine: 'chute', L: Lu, Lbrut: it.L, idx: idx, typeId: it.typeId, bout: it.bout || 'droit',
-          pool: p.pool, hauteur: p.hauteur
-        });
+        if (Lu > EPS) {
+          var or = veutEmbouts
+            ? orienterEmbouts(it.emboutGauche, it.emboutDroit, souhaiteGauche)
+            : { gauche: 'droit', droit: 'droit' };
+          base.push({
+            origine: 'chute', L: Lu, Lbrut: it.L, idx: idx, typeId: it.typeId, bout: it.bout || 'droit',
+            pool: p.pool, hauteur: p.hauteur, languettePresente: it.languettePresente !== false,
+            codeLame: it.codeLame || null, emboutGauche: or.gauche, emboutDroit: or.droit
+          });
+        }
       });
     });
     fam.types.forEach(function (t) {
+      var or = veutEmbouts
+        ? emboutsNeuve(souhaiteGauche, true, o)
+        : { gauche: 'droit', droit: 'droit' };
       base.push({
         origine: ctx.restant[t.id] > 0 ? 'neuve' : 'manquante', L: t.longueur, Lbrut: t.longueur,
-        type: t, typeId: t.id, bout: 'droit', pool: poolExact, hauteur: rang.largeur
+        type: t, typeId: t.id, bout: 'droit', pool: poolExact, hauteur: rang.largeur,
+        languettePresente: t.languettePresente !== false, codeLame: null,
+        emboutGauche: or.gauche, emboutDroit: or.droit
       });
     });
     function extra(e) { return besoin.supDebut + (e >= r - EPS ? besoin.supFin : 0); }
-    var decs = [o.decalageMin, o.decalageMin / 2, 0];
-    for (var d = 0; d < decs.length; d++) {
+    var droitJoint = emboutDroitAuJoint(o);
+    var facteurs = [1, 0.5, 0];
+    for (var d = 0; d < facteurs.length; d++) {
+      var contraintes = contraintesJoints(historique, rang.source, o, facteurs[d]);
       var best = null;
       for (var i = 0; i < base.length; i++) {
-        var ev = evaluer(base[i].L, c, r, prev, decs[d], o, d < 2 ? interdits : [], extra);
+        var ev = evaluer(base[i].L, c, r, contraintes, o, d < 2 ? interdits : [], extra);
         if (!ev) continue;
         var cout = ev.cout + (base[i].origine === 'manquante' ? 1e6 : 0);
         var rip = base[i].hauteur > rang.largeur + EPS ? 1 : 0;
+        var sansLang = aLanguette(base[i]) ? 0 : 1;
+        var suite = ev.e < r - EPS;
+        var emb = veutEmbouts
+          ? malusEmbout(base[i].emboutGauche, souhaiteGauche) + (suite && base[i].emboutDroit !== droitJoint ? 1 : 0)
+          : 0;
         var k = o.prioriteCoupe === 'longueur'
-          ? [base[i].origine === 'manquante' ? 1 : 0, -ev.e, ev.cout, rip, base[i].origine === 'chute' ? 0 : 1]
-          : [cout, base[i].origine === 'chute' ? 0 : 1, rip, -ev.e];
+          ? [base[i].origine === 'manquante' ? 1 : 0, -ev.e, emb, ev.cout, rip, sansLang, base[i].origine === 'chute' ? 0 : 1]
+          : [cout, emb, base[i].origine === 'chute' ? 0 : 1, rip, sansLang, -ev.e];
         if (!best || comparerCles(k, best.k) < 0) best = { cand: base[i], e: ev.e, k: k };
       }
       if (best) {
@@ -449,11 +635,13 @@
     return 'droit';
   }
 
-  function remplirSegment(ctx, rang, a, b, prev, nouveaux, sortie, interdits, extremites) {
+  function remplirSegment(ctx, rang, a, b, historique, nouveaux, sortie, interdits, extremites) {
     var o = ctx.o;
     extremites = extremites || { uMin: a, uMax: b, bordDebut: null, bordFin: null, E: 0 };
     var c = a;
     var garde = 0;
+    var emboutPrecedentDroit = null;
+    var veutEmbouts = o.emboutsBout !== false;
     while (b - c > EPS && garde++ < 5000) {
       var r = b - c;
       var auDebut = Math.abs(c - extremites.uMin) < EPS && Math.abs(a - extremites.uMin) < EPS;
@@ -461,29 +649,85 @@
         bout: auDebut ? (extremites.boutDebut || 'droit') : 'droit',
         supDebut: auDebut ? (extremites.supDebut || 0) : 0,
         supFin: (Math.abs(b - extremites.uMax) < EPS ? (extremites.supFin || 0) : 0),
-        E: extremites.E || 0
+        E: extremites.E || 0,
+        emboutGauche: veutEmbouts ? complementEmbout(emboutPrecedentDroit) : null
       };
-      var ch = choisirPiece(ctx, rang, c, r, prev, interdits, besoin);
+      var ch = choisirPiece(ctx, rang, c, r, historique, interdits, besoin);
       var cand = ch.cand, e = ch.e;
       var atteintFin = Math.abs(c + e - b) < EPS && Math.abs(b - extremites.uMax) < EPS;
       var stock = e + (auDebut ? besoin.supDebut : 0) + (atteintFin ? besoin.supFin : 0);
+      var codeLame;
       if (cand.origine === 'chute') {
         ch.pool.splice(cand.idx, 1);
+        codeLame = cand.codeLame || allouerCode(ctx, cand.typeId);
       } else {
         ctx.consomme[cand.typeId] = (ctx.consomme[cand.typeId] || 0) + 1;
         if (cand.origine === 'manquante') ctx.manquantes[cand.typeId] = (ctx.manquantes[cand.typeId] || 0) + 1;
         else ctx.restant[cand.typeId]--;
+        codeLame = allouerCode(ctx, cand.typeId);
       }
+      if (!aLanguette(cand)) ctx.piecesSansLanguette++;
       var boutFin = atteintFin ? complementBout(extremites.boutFin || 'droit') : 'droit';
       var baseReste = (cand.bout && cand.bout !== 'droit' && cand.bout !== besoin.bout) ? (cand.Lbrut - (extremites.E || 0)) : cand.Lbrut;
       if (!(baseReste > 0)) baseReste = cand.L;
-      var reste = baseReste - stock;
-      if (reste >= o.longueurMinPiece - EPS) ch.pool.push({ L: reste, typeId: cand.typeId, bout: boutFin });
-      var bande = (cand.hauteur || rang.largeur) - rang.largeur;
+      var kerf = (stock < baseReste - EPS) ? (o.epaisseurScie || 0) : 0;
+      var reste = baseReste - stock - kerf;
+      if (!(reste < baseReste - EPS)) reste = -1;
+      if (kerf > 0 && !(reste < baseReste - stock - EPS)) reste = -1;
+      var langPiece = aLanguette(cand);
+      var coupePartielle = stock < baseReste - EPS;
+      var suite = b - (c + e) > EPS;
+      var embPoseG = 'droit';
+      var embPoseD = 'droit';
+      var resteEmbG = 'droit';
+      var resteEmbD = 'droit';
+      if (veutEmbouts) {
+        var droitJoint = emboutDroitAuJoint(o);
+        var gaucheJoint = complementEmbout(droitJoint);
+        if (!coupePartielle) {
+          embPoseG = cand.emboutGauche || 'droit';
+          embPoseD = cand.emboutDroit || 'droit';
+        } else if (besoin.emboutGauche === gaucheJoint) {
+          embPoseG = gaucheJoint;
+          embPoseD = 'droit';
+          resteEmbG = 'droit';
+          resteEmbD = droitJoint;
+        } else if (suite || besoin.emboutGauche == null) {
+          embPoseG = besoin.emboutGauche == null
+            ? (o.sensLanguetteBout === 'gauche' ? 'languette' : 'droit')
+            : (cand.emboutGauche || 'droit');
+          if (besoin.emboutGauche == null && o.sensLanguetteBout !== 'gauche') embPoseG = 'droit';
+          embPoseD = droitJoint;
+          resteEmbG = 'droit';
+          resteEmbD = gaucheJoint;
+        } else {
+          embPoseG = cand.emboutGauche || 'droit';
+          embPoseD = 'droit';
+          resteEmbG = 'droit';
+          resteEmbD = cand.emboutDroit === 'languette' || cand.emboutGauche === 'languette' ? 'languette' : 'encoche';
+        }
+      }
+      var codeSuivant = codeLame;
+      if (reste >= o.longueurMinPiece - EPS) {
+        codeSuivant = nomChute(codeSuivant);
+        ctx.codesReserves[codeSuivant] = true;
+        ch.pool.push({
+          L: reste, typeId: cand.typeId, bout: boutFin, languettePresente: langPiece, codeLame: codeSuivant,
+          emboutGauche: resteEmbG, emboutDroit: resteEmbD
+        });
+      }
+      var hauteurCand = cand.hauteur || rang.largeur;
+      var kerfLargeur = (hauteurCand > rang.largeur + EPS) ? (o.epaisseurScie || 0) : 0;
+      var bande = hauteurCand - rang.largeur - kerfLargeur;
       if (o.sansLanguette && bande > EPS && stock >= o.longueurMinPiece - EPS) {
         var cleBande = clePool(rang.source, bande);
         var poolBande = ctx.pool[cleBande] || (ctx.pool[cleBande] = []);
-        poolBande.push({ L: stock, typeId: cand.typeId, bout: 'droit' });
+        codeSuivant = nomChute(codeLame === codeSuivant ? codeLame : codeSuivant);
+        ctx.codesReserves[codeSuivant] = true;
+        poolBande.push({
+          L: stock, typeId: cand.typeId, bout: 'droit', languettePresente: false, codeLame: codeSuivant,
+          emboutGauche: 'droit', emboutDroit: 'droit'
+        });
       }
       if (b - (c + e) > EPS) nouveaux.push(c + e);
       var vis = faceVisible(c, e, auDebut, atteintFin, extremites);
@@ -494,8 +738,12 @@
         coupeFin: atteintFin ? (extremites.coupeFin || 'droite') : 'droite',
         origine: cand.origine === 'chute' ? 'chute' : 'neuve',
         manquante: cand.origine === 'manquante', typeId: cand.typeId, longueurLame: cand.Lbrut || cand.L,
+        codeLame: codeLame,
+        emboutGauche: embPoseG,
+        emboutDroit: embPoseD,
         coupe: stock < (cand.Lbrut || cand.L) - EPS || vis.longue > vis.courte + EPS || (cand.hauteur || rang.largeur) > rang.largeur + EPS
       });
+      emboutPrecedentDroit = embPoseD;
       c += e;
     }
   }
@@ -616,7 +864,7 @@
     var rangsPlan = actifs
       ? planifierRangs(V, cycle, ctx.norm, ctx.avert, mur.id, vDebut, vFin)
       : planifierRangs(V, cycle, ctx.norm, ctx.avert, mur.id);
-    var prev = [];
+    var historique = [];
     var pieces = [];
     var rangs = [];
 
@@ -638,7 +886,9 @@
           coupeHaut: horiz ? 'droite' : (p.coupeFin || 'droite'),
           largeurRang: rang.largeur, famille: rang.source, refendu: rang.refendu,
           raccord: !!rang.raccord, percements: perces,
-          origine: p.origine, manquante: p.manquante, typeId: p.typeId, longueurLame: p.longueurLame, coupe: p.coupe
+          origine: p.origine, manquante: p.manquante, typeId: p.typeId, longueurLame: p.longueurLame,
+          codeLame: p.codeLame || null, coupe: p.coupe,
+          emboutGauche: p.emboutGauche || null, emboutDroit: p.emboutDroit || null
         });
       });
     }
@@ -659,7 +909,7 @@
         sensDebut: bordLong(true).sens || null, sensFin: bordLong(false).sens || null
       };
       segmentsLibres(rang, ouvertures, u0, u1).forEach(function (s) {
-        remplirSegment(ctx, rang, s[0], s[1], prev, nouveaux, brutes, interdits, ext);
+        remplirSegment(ctx, rang, s[0], s[1], historique, nouveaux, brutes, interdits, ext);
       });
       enregistrer(ri, rang, brutes, 0);
       var nbRaccords = 0;
@@ -686,7 +936,9 @@
         rang: ri + 1, largeur: rang.largeur, famille: rang.source, refendu: rang.refendu,
         pieces: brutes.length + nbRaccords, joints: nouveaux.length
       });
-      prev = nouveaux;
+      historique.unshift({ joints: nouveaux.slice(), famille: rang.source });
+      var profondeur = Math.max(1, Math.floor(o.decalageProfondeur || 3));
+      if (historique.length > profondeur) historique.length = profondeur;
     });
     var surfaceMur = mur.largeur * mur.hauteur;
     var surfaceOuvertures = mur.obstacles.filter(function (ob) { return ob.type === 'ouverture'; })
@@ -712,10 +964,26 @@
 
   function nouveauContexte(norm, avert) {
     var restant = {};
-    norm.types.forEach(function (t) { restant[t.id] = t.quantite; });
+    var typesById = {};
+    var filesCodes = {};
+    var codesReserves = {};
+    norm.types.forEach(function (t) {
+      restant[t.id] = t.quantite;
+      typesById[t.id] = t;
+      if (t.codes && t.codes.length) {
+        filesCodes[t.id] = [];
+        t.codes.forEach(function (c) {
+          var code = String(c);
+          if (!code || codesReserves[code]) return;
+          codesReserves[code] = true;
+          filesCodes[t.id].push(code);
+        });
+      }
+    });
     return {
       norm: norm, o: norm.o, familles: norm.familles, restant: restant, pool: {}, consomme: {}, manquantes: {},
-      decalagesRelaches: 0, contraintesRelachees: 0, avert: avert
+      typesById: typesById, filesCodes: filesCodes, codesReserves: codesReserves, codeIndex: 0, codesUtilises: [],
+      decalagesRelaches: 0, contraintesRelachees: 0, piecesSansLanguette: 0, avert: avert
     };
   }
 
@@ -745,7 +1013,11 @@
       var largeur = Number(cle.split('@')[1]);
       var fam = cle.split('@')[0];
       ctx.pool[cle].forEach(function (it) {
-        restantes.push({ famille: fam, largeurRang: largeur, longueur: arrondi(it.L), bout: it.bout || 'droit' });
+        restantes.push({
+          famille: fam, largeurRang: largeur, longueur: arrondi(it.L), bout: it.bout || 'droit',
+          codeLame: it.codeLame || null, typeId: it.typeId || null,
+          emboutGauche: it.emboutGauche || null, emboutDroit: it.emboutDroit || null
+        });
         surfaceRestantes += m2(it.L * largeur);
       });
     });
@@ -767,10 +1039,16 @@
       montant: commande.some(function (c) { return c.montant !== null; })
         ? Math.round(commande.reduce(function (s, c) { return s + (c.montant || 0); }, 0) * 100) / 100 : null
     };
+    if (!o.poseLanguettesConfirmees) {
+      avert.push('Sens de pose dans le rang et disposition des languettes non confirmés pour ce projet. À valider avant de scier.');
+    }
     if (total.lamesManquantes > 0) avert.push('Stock insuffisant : il manque ' + total.lamesManquantes + ' lame(s) pour couvrir tout le lot.');
     if (ctx.decalagesRelaches > 0) avert.push('Le décalage minimum entre joints n\'a pas pu être tenu pour ' + ctx.decalagesRelaches + ' pièce(s).');
     if (ctx.contraintesRelachees > 0) avert.push('Des pièces plus courtes que la longueur minimale ont été nécessaires (' + ctx.contraintesRelachees + ').');
-    return { total: total, commande: commande, chutesRestantes: restantes };
+    if (ctx.piecesSansLanguette > 0) {
+      avert.push(ctx.piecesSansLanguette + ' pièce(s) viennent d\'une lame sans languette. Un listel peut rattraper le joint, le rendu est moins propre.');
+    }
+    return { total: total, commande: commande, chutesRestantes: restantes, codesMarques: ctx.codesUtilises.slice() };
   }
 
   function permutations(a) {
@@ -937,6 +1215,69 @@
     return lignes;
   }
 
+  /** Chaînes de faces reliées par un angle (crédence, retour) : la numérotation des rangs enchaîne. */
+  function renumeroterRangsSuites(mursResult, mursTopo, ordreIds) {
+    var parTopo = {};
+    (mursTopo || []).forEach(function (m) { parTopo[m.id] = m; });
+    var adj = {};
+    (mursTopo || []).forEach(function (m) {
+      if (!adj[m.id]) adj[m.id] = [];
+      if (!m.bords) return;
+      ['gauche', 'droite', 'bas', 'haut'].forEach(function (nom) {
+        var b = m.bords[nom];
+        if (!b || b.type !== 'angle' || !b.voisin || !parTopo[b.voisin]) return;
+        if (adj[m.id].indexOf(b.voisin) < 0) adj[m.id].push(b.voisin);
+        if (!adj[b.voisin]) adj[b.voisin] = [];
+        if (adj[b.voisin].indexOf(m.id) < 0) adj[b.voisin].push(m.id);
+      });
+    });
+    var rangIndex = {};
+    ordreIds.forEach(function (id, i) { rangIndex[id] = i; });
+    var vus = {};
+    Object.keys(adj).forEach(function (start) {
+      if (vus[start] || !adj[start].length) return;
+      var pile = [start];
+      var comp = [];
+      while (pile.length) {
+        var id = pile.pop();
+        if (vus[id]) continue;
+        vus[id] = true;
+        comp.push(id);
+        (adj[id] || []).forEach(function (v) { if (!vus[v]) pile.push(v); });
+      }
+      if (comp.length < 2) return;
+      var ends = comp.filter(function (id) { return (adj[id] || []).length === 1; });
+      ends.sort(function (a, b) { return (rangIndex[a] || 0) - (rangIndex[b] || 0); });
+      var debut = ends.length ? ends[0] : comp.slice().sort(function (a, b) { return (rangIndex[a] || 0) - (rangIndex[b] || 0); })[0];
+      var chaine = [debut];
+      var prev = null;
+      var cur = debut;
+      while (chaine.length < comp.length) {
+        var suiv = (adj[cur] || []).filter(function (v) { return v !== prev; })[0];
+        if (!suiv || chaine.indexOf(suiv) >= 0) break;
+        chaine.push(suiv);
+        prev = cur;
+        cur = suiv;
+      }
+      var parRes = {};
+      mursResult.forEach(function (m) { parRes[m.id] = m; });
+      var offset = 0;
+      chaine.forEach(function (id) {
+        var m = parRes[id];
+        if (!m) return;
+        var anciens = {};
+        (m.rangs || []).forEach(function (r) { anciens[r.rang] = true; });
+        (m.pieces || []).forEach(function (p) { anciens[p.rang] = true; });
+        var liste = Object.keys(anciens).map(Number).sort(function (a, b) { return a - b; });
+        var map = {};
+        liste.forEach(function (r, i) { map[r] = offset + i + 1; });
+        (m.rangs || []).forEach(function (r) { if (map[r.rang] !== undefined) r.rang = map[r.rang]; });
+        (m.pieces || []).forEach(function (p) { if (map[p.rang] !== undefined) p.rang = map[p.rang]; });
+        offset += liste.length;
+      });
+    });
+  }
+
   function calculerFixe(norm, orientation, motif) {
     var cycle = cycleDepuisMotif(norm, motif);
     var orders = [norm.murs.map(function (m) { return m.id; })];
@@ -962,6 +1303,7 @@
         resultats[id] = disposerMur(ctx, parId[id], parId[id].orientation || orientation, cycle);
       });
       var murs = norm.murs.map(function (m) { return resultats[m.id]; });
+      renumeroterRangsSuites(murs, applique.murs, norm.murs.map(function (m) { return m.id; }));
       var syn = synthese(norm, ctx, murs, avert);
       var cle = [syn.total.lamesManquantes, syn.total.surfaceAchetee, syn.total.joints];
       var idBits = bits.join('');
@@ -1009,7 +1351,15 @@
       var memes = norm.cles.filter(function (k) { return Math.abs(norm.familles[k].largeurUtile - w) < EPS; });
       return memes.length === 1 ? w : cle;
     }
-    var optionsRetenues = { orientation: orientation, motif: motif.motif, prioriteCoupe: norm.o.prioriteCoupe };
+    var optionsRetenues = {
+      orientation: orientation,
+      motif: motif.motif,
+      prioriteCoupe: norm.o.prioriteCoupe,
+      sensPoseRang: norm.o.sensPoseRang,
+      sensLanguetteChant: norm.o.sensLanguetteChant,
+      sensLanguetteBout: norm.o.sensLanguetteBout,
+      poseLanguettesConfirmees: norm.o.poseLanguettesConfirmees
+    };
     if (motif.motif === 'uniforme') optionsRetenues.famille = refLisible(cycle[0]);
     if (motif.motif === 'sequence') optionsRetenues.sequence = cycle.map(refLisible);
     if (motif.motif === 'aleatoire') optionsRetenues.graine = Number(motif.graine) || 1;
@@ -1026,6 +1376,7 @@
       total: meilleur.syn.total,
       commande: meilleur.syn.commande,
       chutesRestantes: meilleur.syn.chutesRestantes,
+      codesMarques: meilleur.syn.codesMarques || [],
       avertissements: uniques
     };
   }
@@ -1104,6 +1455,20 @@
     var L = [];
     var p = res.parametres;
     L.push('Projet : ' + (res.projet || '(sans nom)') + ', ' + res.murs.length + ' mur(s), sens ' + p.orientation + ', ' + p.libelleMotif + '.');
+    if (p.options && p.options.epaisseurScie > 0) {
+      L.push('Épaisseur de lame de scie : ' + texte(p.options.epaisseurScie) + ' mm par coupe.');
+    }
+    if (p.options) {
+      var poseRang = p.options.sensPoseRang === 'droite-gauche' ? 'de droite à gauche' : 'de gauche à droite';
+      var chant = p.options.sensLanguetteChant === 'bas' ? 'vers le bas' : 'vers le haut';
+      var bout = p.options.sensLanguetteBout === 'gauche'
+        ? 'languette de bout vers la gauche au joint'
+        : 'languette de bout vers la droite au joint';
+      L.push('Pose dans le rang : ' + poseRang + '. Languette de chant ' + chant + '. ' + bout.charAt(0).toUpperCase() + bout.slice(1) + '.');
+      if (!p.options.poseLanguettesConfirmees) {
+        L.push('Ces sens de languettes sont des valeurs de départ : à confirmer avant de scier.');
+      }
+    }
     if (res.murs.length > 1) L.push('Ordre de pose retenu pour réutiliser les chutes : ' + p.ordreMurs.join(', ') + '.');
     res.murs.forEach(function (m) {
       L.push('');
@@ -1136,6 +1501,14 @@
       }
       L.push(ligne);
     });
+    if (res.codesMarques && res.codesMarques.length) {
+      L.push('');
+      L.push('Codes à marquer sur les barres (écrire avant de scier ; la chute s\'appelle « Chute de » suivi du code) :');
+      res.codesMarques.forEach(function (c) {
+        L.push('- ' + c.code + ' : ' + c.libelle + ' [' + c.typeId + ']'
+          + (c.largeurUtile && c.longueur ? ', ' + texte(c.largeurUtile) + ' x ' + texte(c.longueur) + ' mm' : ''));
+      });
+    }
     L.push('');
     L.push('Chute globale : ' + texte(Math.round(t.chutePct * 10) / 10) + ' % (achetée ' + texte(Math.round(t.surfaceAchetee * 100) / 100)
       + ' m2 pour ' + texte(Math.round(t.surfaceRevetue * 100) / 100) + ' m2 posés), dont '
